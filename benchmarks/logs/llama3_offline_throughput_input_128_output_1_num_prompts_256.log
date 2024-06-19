@@ -1,0 +1,627 @@
+Namespace(backend='vllm', dataset=None, input_len=128, output_len=1, model='meta-llama/Meta-Llama-3-8B', tokenizer='meta-llama/Meta-Llama-3-8B', quantization=None, tensor_parallel_size=1, n=1, use_beam_search=False, num_prompts=256, seed=0, hf_max_batch_size=None, trust_remote_code=False, max_model_len=None, dtype='bfloat16', gpu_memory_utilization=0.9, enforce_eager=False, kv_cache_dtype='auto', quantization_param_path=None, device='hpu', enable_prefix_caching=False, enable_chunked_prefill=False, max_num_batched_tokens=None, download_dir=None)
+INFO 06-19 07:50:15 llm_engine.py:100] Initializing an LLM engine (v0.4.2) with config: model='meta-llama/Meta-Llama-3-8B', speculative_config=None, tokenizer='meta-llama/Meta-Llama-3-8B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=8192, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=hpu, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), seed=0, served_model_name=meta-llama/Meta-Llama-3-8B)
+INFO 06-19 07:50:15 profiler.py:59] Profiler enabled for: vllm-instance-76df3be4d7134c2ea14d3ebdeaf2a57c
+WARNING 06-19 07:50:15 utils.py:454] Pin memory is not supported on HPU.
+INFO 06-19 07:50:15 selector.py:52] Using HabanaAttention backend.
+INFO 06-19 07:50:15 habana_model_runner.py:328] Prompt bucket config (min, step, max_warmup) bs:[1, 32, 64], seq:[128, 128, 1024]
+INFO 06-19 07:50:15 habana_model_runner.py:330] Generated 56 prompt buckets: [(1, 128), (1, 256), (1, 384), (1, 512), (1, 640), (1, 768), (1, 896), (1, 1024), (2, 128), (2, 256), (2, 384), (2, 512), (2, 640), (2, 768), (2, 896), (2, 1024), (4, 128), (4, 256), (4, 384), (4, 512), (4, 640), (4, 768), (4, 896), (4, 1024), (8, 128), (8, 256), (8, 384), (8, 512), (8, 640), (8, 768), (8, 896), (8, 1024), (16, 128), (16, 256), (16, 384), (16, 512), (16, 640), (16, 768), (16, 896), (16, 1024), (32, 128), (32, 256), (32, 384), (32, 512), (32, 640), (32, 768), (32, 896), (32, 1024), (64, 128), (64, 256), (64, 384), (64, 512), (64, 640), (64, 768), (64, 896), (64, 1024)]
+INFO 06-19 07:50:15 habana_model_runner.py:332] Decode bucket config (min, step, max_warmup) bs:[1, 128, 256], seq:[128, 128, 2048]
+INFO 06-19 07:50:15 habana_model_runner.py:334] Generated 144 decode buckets: [(1, 128), (1, 256), (1, 384), (1, 512), (1, 640), (1, 768), (1, 896), (1, 1024), (1, 1152), (1, 1280), (1, 1408), (1, 1536), (1, 1664), (1, 1792), (1, 1920), (1, 2048), (2, 128), (2, 256), (2, 384), (2, 512), (2, 640), (2, 768), (2, 896), (2, 1024), (2, 1152), (2, 1280), (2, 1408), (2, 1536), (2, 1664), (2, 1792), (2, 1920), (2, 2048), (4, 128), (4, 256), (4, 384), (4, 512), (4, 640), (4, 768), (4, 896), (4, 1024), (4, 1152), (4, 1280), (4, 1408), (4, 1536), (4, 1664), (4, 1792), (4, 1920), (4, 2048), (8, 128), (8, 256), (8, 384), (8, 512), (8, 640), (8, 768), (8, 896), (8, 1024), (8, 1152), (8, 1280), (8, 1408), (8, 1536), (8, 1664), (8, 1792), (8, 1920), (8, 2048), (16, 128), (16, 256), (16, 384), (16, 512), (16, 640), (16, 768), (16, 896), (16, 1024), (16, 1152), (16, 1280), (16, 1408), (16, 1536), (16, 1664), (16, 1792), (16, 1920), (16, 2048), (32, 128), (32, 256), (32, 384), (32, 512), (32, 640), (32, 768), (32, 896), (32, 1024), (32, 1152), (32, 1280), (32, 1408), (32, 1536), (32, 1664), (32, 1792), (32, 1920), (32, 2048), (64, 128), (64, 256), (64, 384), (64, 512), (64, 640), (64, 768), (64, 896), (64, 1024), (64, 1152), (64, 1280), (64, 1408), (64, 1536), (64, 1664), (64, 1792), (64, 1920), (64, 2048), (128, 128), (128, 256), (128, 384), (128, 512), (128, 640), (128, 768), (128, 896), (128, 1024), (128, 1152), (128, 1280), (128, 1408), (128, 1536), (128, 1664), (128, 1792), (128, 1920), (128, 2048), (256, 128), (256, 256), (256, 384), (256, 512), (256, 640), (256, 768), (256, 896), (256, 1024), (256, 1152), (256, 1280), (256, 1408), (256, 1536), (256, 1664), (256, 1792), (256, 1920), (256, 2048)]
+INFO 06-19 07:50:18 weight_utils.py:199] Using model weights format ['*.safetensors']
+INFO 06-19 07:50:21 habana_model_runner.py:284] Pre-loading model weights on hpu:0 took 14.96 GiB of device memory (14.97 GiB/94.62 GiB used) and 45.55 MiB of host memory (7.764 GiB/108.1 GiB used)
+INFO 06-19 07:50:22 habana_model_runner.py:289] Wrapping in HPU Graph took 0 B of device memory (14.97 GiB/94.62 GiB used) and 0 B of host memory (7.764 GiB/108.1 GiB used)
+INFO 06-19 07:50:22 habana_model_runner.py:292] Loading model weights took in total 14.96 GiB of device memory (14.97 GiB/94.62 GiB used) and 45.55 MiB of host memory (7.764 GiB/108.1 GiB used)
+INFO 06-19 07:50:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:22 pynccl_utils.py:17] Failed to import NCCL library: NCCL only supports CUDA and ROCm backends.
+INFO 06-19 07:50:22 pynccl_utils.py:18] It is expected if you are not running on NVIDIA GPUs.
+INFO 06-19 07:50:27 habana_executor.py:78] # HPU blocks: 2597, # CPU blocks: 256
+INFO 06-19 07:50:27 habana_model_runner.py:955] [Warmup][Prompt][1/56] batch_size:64 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:50:27 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:27 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:30 habana_model_runner.py:955] [Warmup][Prompt][2/56] batch_size:64 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:50:30 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:31 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:35 habana_model_runner.py:955] [Warmup][Prompt][3/56] batch_size:64 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:50:35 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:35 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:38 habana_model_runner.py:955] [Warmup][Prompt][4/56] batch_size:64 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:50:38 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:38 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:41 habana_model_runner.py:955] [Warmup][Prompt][5/56] batch_size:32 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:50:41 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:41 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:44 habana_model_runner.py:955] [Warmup][Prompt][6/56] batch_size:64 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:50:44 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:44 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:46 habana_model_runner.py:955] [Warmup][Prompt][7/56] batch_size:32 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:50:46 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:46 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:48 habana_model_runner.py:955] [Warmup][Prompt][8/56] batch_size:32 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:50:48 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:48 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:50 habana_model_runner.py:955] [Warmup][Prompt][9/56] batch_size:64 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:50:50 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:50 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:52 habana_model_runner.py:955] [Warmup][Prompt][10/56] batch_size:32 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:50:52 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:52 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:54 habana_model_runner.py:955] [Warmup][Prompt][11/56] batch_size:16 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:50:54 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:54 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:56 habana_model_runner.py:955] [Warmup][Prompt][12/56] batch_size:32 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:50:56 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:56 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:57 habana_model_runner.py:955] [Warmup][Prompt][13/56] batch_size:64 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:50:57 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:57 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:59 habana_model_runner.py:955] [Warmup][Prompt][14/56] batch_size:16 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:50:59 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:50:59 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:00 habana_model_runner.py:955] [Warmup][Prompt][15/56] batch_size:16 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:51:00 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:00 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:01 habana_model_runner.py:955] [Warmup][Prompt][16/56] batch_size:32 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:01 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:01 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:02 habana_model_runner.py:955] [Warmup][Prompt][17/56] batch_size:16 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:51:02 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:02 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:04 habana_model_runner.py:955] [Warmup][Prompt][18/56] batch_size:8 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:51:04 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:04 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:04 habana_model_runner.py:955] [Warmup][Prompt][19/56] batch_size:16 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:51:04 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:04 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:05 habana_model_runner.py:955] [Warmup][Prompt][20/56] batch_size:32 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:05 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:05 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:06 habana_model_runner.py:955] [Warmup][Prompt][21/56] batch_size:64 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:06 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:06 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:07 habana_model_runner.py:955] [Warmup][Prompt][22/56] batch_size:8 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:51:07 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:07 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:08 habana_model_runner.py:955] [Warmup][Prompt][23/56] batch_size:8 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:51:08 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:08 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:09 habana_model_runner.py:955] [Warmup][Prompt][24/56] batch_size:16 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:09 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:09 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:10 habana_model_runner.py:955] [Warmup][Prompt][25/56] batch_size:8 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:51:10 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:10 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:10 habana_model_runner.py:955] [Warmup][Prompt][26/56] batch_size:4 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:51:10 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:10 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:11 habana_model_runner.py:955] [Warmup][Prompt][27/56] batch_size:8 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:51:11 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:11 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:12 habana_model_runner.py:955] [Warmup][Prompt][28/56] batch_size:16 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:12 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:12 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:12 habana_model_runner.py:955] [Warmup][Prompt][29/56] batch_size:32 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:12 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:12 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:13 habana_model_runner.py:955] [Warmup][Prompt][30/56] batch_size:4 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:51:13 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:13 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:13 habana_model_runner.py:955] [Warmup][Prompt][31/56] batch_size:4 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:51:13 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:13 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:14 habana_model_runner.py:955] [Warmup][Prompt][32/56] batch_size:8 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:14 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:14 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:15 habana_model_runner.py:955] [Warmup][Prompt][33/56] batch_size:4 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:51:15 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:15 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:15 habana_model_runner.py:955] [Warmup][Prompt][34/56] batch_size:2 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:51:15 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:15 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:16 habana_model_runner.py:955] [Warmup][Prompt][35/56] batch_size:4 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:51:16 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:16 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:17 habana_model_runner.py:955] [Warmup][Prompt][36/56] batch_size:8 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:17 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:17 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:17 habana_model_runner.py:955] [Warmup][Prompt][37/56] batch_size:16 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:17 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:17 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:18 habana_model_runner.py:955] [Warmup][Prompt][38/56] batch_size:2 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:51:18 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:18 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:18 habana_model_runner.py:955] [Warmup][Prompt][39/56] batch_size:2 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:51:18 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:18 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:19 habana_model_runner.py:955] [Warmup][Prompt][40/56] batch_size:4 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:19 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:19 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:19 habana_model_runner.py:955] [Warmup][Prompt][41/56] batch_size:2 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:51:19 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:19 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:20 habana_model_runner.py:955] [Warmup][Prompt][42/56] batch_size:1 seq_len:1024 free_mem:34.58 GiB
+INFO 06-19 07:51:20 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:20 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:20 habana_model_runner.py:955] [Warmup][Prompt][43/56] batch_size:2 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:51:20 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:20 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:21 habana_model_runner.py:955] [Warmup][Prompt][44/56] batch_size:4 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:21 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:21 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:21 habana_model_runner.py:955] [Warmup][Prompt][45/56] batch_size:8 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:21 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:21 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:22 habana_model_runner.py:955] [Warmup][Prompt][46/56] batch_size:1 seq_len:896 free_mem:34.58 GiB
+INFO 06-19 07:51:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:22 habana_model_runner.py:955] [Warmup][Prompt][47/56] batch_size:1 seq_len:768 free_mem:34.58 GiB
+INFO 06-19 07:51:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:22 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:23 habana_model_runner.py:955] [Warmup][Prompt][48/56] batch_size:2 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:23 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:23 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:23 habana_model_runner.py:955] [Warmup][Prompt][49/56] batch_size:1 seq_len:640 free_mem:34.58 GiB
+INFO 06-19 07:51:23 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:23 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:24 habana_model_runner.py:955] [Warmup][Prompt][50/56] batch_size:1 seq_len:512 free_mem:34.58 GiB
+INFO 06-19 07:51:24 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:24 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:24 habana_model_runner.py:955] [Warmup][Prompt][51/56] batch_size:2 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:24 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:24 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:25 habana_model_runner.py:955] [Warmup][Prompt][52/56] batch_size:4 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:25 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:25 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:25 habana_model_runner.py:955] [Warmup][Prompt][53/56] batch_size:1 seq_len:384 free_mem:34.58 GiB
+INFO 06-19 07:51:25 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:25 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:955] [Warmup][Prompt][54/56] batch_size:1 seq_len:256 free_mem:34.58 GiB
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:955] [Warmup][Prompt][55/56] batch_size:2 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:955] [Warmup][Prompt][56/56] batch_size:1 seq_len:128 free_mem:34.58 GiB
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:26 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:51:27 habana_model_runner.py:955] [Warmup][Decode][1/144] batch_size:256 seq_len:2048 free_mem:34.58 GiB
+INFO 06-19 07:51:27 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:28 habana_model_runner.py:955] [Warmup][Decode][2/144] batch_size:256 seq_len:1920 free_mem:34.58 GiB
+INFO 06-19 07:51:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:28 habana_model_runner.py:955] [Warmup][Decode][3/144] batch_size:256 seq_len:1792 free_mem:34.58 GiB
+INFO 06-19 07:51:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:29 habana_model_runner.py:955] [Warmup][Decode][4/144] batch_size:256 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:51:29 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:29 habana_model_runner.py:955] [Warmup][Decode][5/144] batch_size:256 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:51:29 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:30 habana_model_runner.py:955] [Warmup][Decode][6/144] batch_size:256 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:51:30 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:31 habana_model_runner.py:955] [Warmup][Decode][7/144] batch_size:256 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:51:31 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:32 habana_model_runner.py:955] [Warmup][Decode][8/144] batch_size:256 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:51:32 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:32 habana_model_runner.py:955] [Warmup][Decode][9/144] batch_size:128 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:51:32 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:33 habana_model_runner.py:955] [Warmup][Decode][10/144] batch_size:256 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:51:33 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:33 habana_model_runner.py:955] [Warmup][Decode][11/144] batch_size:128 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:51:33 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:34 habana_model_runner.py:955] [Warmup][Decode][12/144] batch_size:128 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:51:34 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:34 habana_model_runner.py:955] [Warmup][Decode][13/144] batch_size:256 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:51:34 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:35 habana_model_runner.py:955] [Warmup][Decode][14/144] batch_size:128 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:51:35 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:35 habana_model_runner.py:955] [Warmup][Decode][15/144] batch_size:128 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:51:35 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:36 habana_model_runner.py:955] [Warmup][Decode][16/144] batch_size:256 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:51:36 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:36 habana_model_runner.py:955] [Warmup][Decode][17/144] batch_size:128 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:51:36 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:37 habana_model_runner.py:955] [Warmup][Decode][18/144] batch_size:128 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:51:37 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:38 habana_model_runner.py:955] [Warmup][Decode][19/144] batch_size:256 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:51:38 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:38 habana_model_runner.py:955] [Warmup][Decode][20/144] batch_size:128 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:51:38 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:39 habana_model_runner.py:955] [Warmup][Decode][21/144] batch_size:64 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:51:39 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:40 habana_model_runner.py:955] [Warmup][Decode][22/144] batch_size:128 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:51:40 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:40 habana_model_runner.py:955] [Warmup][Decode][23/144] batch_size:256 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:51:40 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:40 habana_model_runner.py:955] [Warmup][Decode][24/144] batch_size:64 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:51:40 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:41 habana_model_runner.py:955] [Warmup][Decode][25/144] batch_size:64 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:51:41 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:41 habana_model_runner.py:955] [Warmup][Decode][26/144] batch_size:128 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:51:41 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:42 habana_model_runner.py:955] [Warmup][Decode][27/144] batch_size:64 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:51:42 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:42 habana_model_runner.py:955] [Warmup][Decode][28/144] batch_size:64 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:51:42 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:43 habana_model_runner.py:955] [Warmup][Decode][29/144] batch_size:128 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:51:43 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:43 habana_model_runner.py:955] [Warmup][Decode][30/144] batch_size:256 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:51:43 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:44 habana_model_runner.py:955] [Warmup][Decode][31/144] batch_size:64 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:51:44 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:44 habana_model_runner.py:955] [Warmup][Decode][32/144] batch_size:64 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:51:44 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:45 habana_model_runner.py:955] [Warmup][Decode][33/144] batch_size:128 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:51:45 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:45 habana_model_runner.py:955] [Warmup][Decode][34/144] batch_size:64 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:51:45 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:46 habana_model_runner.py:955] [Warmup][Decode][35/144] batch_size:32 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:51:46 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:47 habana_model_runner.py:955] [Warmup][Decode][36/144] batch_size:64 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:51:47 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:47 habana_model_runner.py:955] [Warmup][Decode][37/144] batch_size:128 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:51:47 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:47 habana_model_runner.py:955] [Warmup][Decode][38/144] batch_size:256 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:51:47 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:48 habana_model_runner.py:955] [Warmup][Decode][39/144] batch_size:32 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:51:48 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:48 habana_model_runner.py:955] [Warmup][Decode][40/144] batch_size:32 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:51:48 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:48 habana_model_runner.py:955] [Warmup][Decode][41/144] batch_size:64 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:51:48 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:49 habana_model_runner.py:955] [Warmup][Decode][42/144] batch_size:32 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:51:49 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:49 habana_model_runner.py:955] [Warmup][Decode][43/144] batch_size:32 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:51:49 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:50 habana_model_runner.py:955] [Warmup][Decode][44/144] batch_size:64 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:51:50 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:50 habana_model_runner.py:955] [Warmup][Decode][45/144] batch_size:128 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:51:50 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:51 habana_model_runner.py:955] [Warmup][Decode][46/144] batch_size:32 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:51:51 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:52 habana_model_runner.py:955] [Warmup][Decode][47/144] batch_size:32 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:51:52 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:52 habana_model_runner.py:955] [Warmup][Decode][48/144] batch_size:64 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:51:52 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:53 habana_model_runner.py:955] [Warmup][Decode][49/144] batch_size:32 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:51:53 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:53 habana_model_runner.py:955] [Warmup][Decode][50/144] batch_size:16 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:51:53 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:54 habana_model_runner.py:955] [Warmup][Decode][51/144] batch_size:32 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:51:54 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:54 habana_model_runner.py:955] [Warmup][Decode][52/144] batch_size:64 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:51:54 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:54 habana_model_runner.py:955] [Warmup][Decode][53/144] batch_size:128 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:51:54 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:51:55 habana_model_runner.py:955] [Warmup][Decode][54/144] batch_size:256 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:51:55 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([256, 1])
+INFO 06-19 07:51:55 habana_model_runner.py:955] [Warmup][Decode][55/144] batch_size:16 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:51:55 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:55 habana_model_runner.py:955] [Warmup][Decode][56/144] batch_size:16 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:51:55 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:56 habana_model_runner.py:955] [Warmup][Decode][57/144] batch_size:32 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:51:56 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:56 habana_model_runner.py:955] [Warmup][Decode][58/144] batch_size:16 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:51:56 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:57 habana_model_runner.py:955] [Warmup][Decode][59/144] batch_size:16 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:51:57 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:57 habana_model_runner.py:955] [Warmup][Decode][60/144] batch_size:32 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:51:57 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:51:58 habana_model_runner.py:955] [Warmup][Decode][61/144] batch_size:64 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:51:58 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:51:58 habana_model_runner.py:955] [Warmup][Decode][62/144] batch_size:16 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:51:58 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:59 habana_model_runner.py:955] [Warmup][Decode][63/144] batch_size:16 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:51:59 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:51:59 habana_model_runner.py:955] [Warmup][Decode][64/144] batch_size:32 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:51:59 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:52:00 habana_model_runner.py:955] [Warmup][Decode][65/144] batch_size:16 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:52:00 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:00 habana_model_runner.py:955] [Warmup][Decode][66/144] batch_size:8 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:52:00 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:01 habana_model_runner.py:955] [Warmup][Decode][67/144] batch_size:16 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:52:01 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:01 habana_model_runner.py:955] [Warmup][Decode][68/144] batch_size:32 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:01 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:52:02 habana_model_runner.py:955] [Warmup][Decode][69/144] batch_size:64 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:02 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:52:02 habana_model_runner.py:955] [Warmup][Decode][70/144] batch_size:128 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:02 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([128, 1])
+INFO 06-19 07:52:02 habana_model_runner.py:955] [Warmup][Decode][71/144] batch_size:8 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:52:02 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:03 habana_model_runner.py:955] [Warmup][Decode][72/144] batch_size:8 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:52:03 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:03 habana_model_runner.py:955] [Warmup][Decode][73/144] batch_size:16 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:52:03 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:03 habana_model_runner.py:955] [Warmup][Decode][74/144] batch_size:8 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:52:03 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:04 habana_model_runner.py:955] [Warmup][Decode][75/144] batch_size:8 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:52:04 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:05 habana_model_runner.py:955] [Warmup][Decode][76/144] batch_size:16 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:52:05 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:05 habana_model_runner.py:955] [Warmup][Decode][77/144] batch_size:32 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:05 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:52:05 habana_model_runner.py:955] [Warmup][Decode][78/144] batch_size:8 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:52:05 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:06 habana_model_runner.py:955] [Warmup][Decode][79/144] batch_size:8 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:52:06 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:07 habana_model_runner.py:955] [Warmup][Decode][80/144] batch_size:16 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:52:07 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:07 habana_model_runner.py:955] [Warmup][Decode][81/144] batch_size:8 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:52:07 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:08 habana_model_runner.py:955] [Warmup][Decode][82/144] batch_size:4 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:52:08 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:08 habana_model_runner.py:955] [Warmup][Decode][83/144] batch_size:8 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:52:08 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:08 habana_model_runner.py:955] [Warmup][Decode][84/144] batch_size:16 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:08 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:09 habana_model_runner.py:955] [Warmup][Decode][85/144] batch_size:32 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:09 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:52:09 habana_model_runner.py:955] [Warmup][Decode][86/144] batch_size:64 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:09 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([64, 1])
+INFO 06-19 07:52:09 habana_model_runner.py:955] [Warmup][Decode][87/144] batch_size:4 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:52:09 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:10 habana_model_runner.py:955] [Warmup][Decode][88/144] batch_size:4 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:52:10 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:10 habana_model_runner.py:955] [Warmup][Decode][89/144] batch_size:8 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:52:10 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:10 habana_model_runner.py:955] [Warmup][Decode][90/144] batch_size:4 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:52:10 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:11 habana_model_runner.py:955] [Warmup][Decode][91/144] batch_size:4 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:52:11 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:11 habana_model_runner.py:955] [Warmup][Decode][92/144] batch_size:8 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:52:11 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:12 habana_model_runner.py:955] [Warmup][Decode][93/144] batch_size:16 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:12 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:12 habana_model_runner.py:955] [Warmup][Decode][94/144] batch_size:4 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:52:12 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:13 habana_model_runner.py:955] [Warmup][Decode][95/144] batch_size:4 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:52:13 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:13 habana_model_runner.py:955] [Warmup][Decode][96/144] batch_size:8 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:52:13 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:14 habana_model_runner.py:955] [Warmup][Decode][97/144] batch_size:4 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:52:14 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:14 habana_model_runner.py:955] [Warmup][Decode][98/144] batch_size:2 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:52:14 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:15 habana_model_runner.py:955] [Warmup][Decode][99/144] batch_size:4 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:52:15 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:15 habana_model_runner.py:955] [Warmup][Decode][100/144] batch_size:8 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:15 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:16 habana_model_runner.py:955] [Warmup][Decode][101/144] batch_size:16 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:16 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:16 habana_model_runner.py:955] [Warmup][Decode][102/144] batch_size:32 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:16 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([32, 1])
+INFO 06-19 07:52:16 habana_model_runner.py:955] [Warmup][Decode][103/144] batch_size:2 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:52:16 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:16 habana_model_runner.py:955] [Warmup][Decode][104/144] batch_size:2 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:52:16 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:17 habana_model_runner.py:955] [Warmup][Decode][105/144] batch_size:4 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:52:17 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:17 habana_model_runner.py:955] [Warmup][Decode][106/144] batch_size:2 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:52:17 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:18 habana_model_runner.py:955] [Warmup][Decode][107/144] batch_size:2 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:52:18 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:18 habana_model_runner.py:955] [Warmup][Decode][108/144] batch_size:4 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:52:18 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:18 habana_model_runner.py:955] [Warmup][Decode][109/144] batch_size:8 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:18 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:19 habana_model_runner.py:955] [Warmup][Decode][110/144] batch_size:2 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:52:19 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:19 habana_model_runner.py:955] [Warmup][Decode][111/144] batch_size:2 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:52:19 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:20 habana_model_runner.py:955] [Warmup][Decode][112/144] batch_size:4 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:52:20 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:20 habana_model_runner.py:955] [Warmup][Decode][113/144] batch_size:2 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:52:20 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:20 habana_model_runner.py:955] [Warmup][Decode][114/144] batch_size:1 seq_len:2048 free_mem:34.57 GiB
+INFO 06-19 07:52:20 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:21 habana_model_runner.py:955] [Warmup][Decode][115/144] batch_size:2 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:52:21 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:21 habana_model_runner.py:955] [Warmup][Decode][116/144] batch_size:4 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:21 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:22 habana_model_runner.py:955] [Warmup][Decode][117/144] batch_size:8 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:22 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:22 habana_model_runner.py:955] [Warmup][Decode][118/144] batch_size:16 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:22 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([16, 1])
+INFO 06-19 07:52:22 habana_model_runner.py:955] [Warmup][Decode][119/144] batch_size:1 seq_len:1920 free_mem:34.57 GiB
+INFO 06-19 07:52:22 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:22 habana_model_runner.py:955] [Warmup][Decode][120/144] batch_size:1 seq_len:1792 free_mem:34.57 GiB
+INFO 06-19 07:52:22 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:23 habana_model_runner.py:955] [Warmup][Decode][121/144] batch_size:2 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:52:23 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:23 habana_model_runner.py:955] [Warmup][Decode][122/144] batch_size:1 seq_len:1664 free_mem:34.57 GiB
+INFO 06-19 07:52:23 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:23 habana_model_runner.py:955] [Warmup][Decode][123/144] batch_size:1 seq_len:1536 free_mem:34.57 GiB
+INFO 06-19 07:52:23 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:24 habana_model_runner.py:955] [Warmup][Decode][124/144] batch_size:2 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:52:24 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:24 habana_model_runner.py:955] [Warmup][Decode][125/144] batch_size:4 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:24 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:24 habana_model_runner.py:955] [Warmup][Decode][126/144] batch_size:1 seq_len:1408 free_mem:34.57 GiB
+INFO 06-19 07:52:24 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:25 habana_model_runner.py:955] [Warmup][Decode][127/144] batch_size:1 seq_len:1280 free_mem:34.57 GiB
+INFO 06-19 07:52:25 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:25 habana_model_runner.py:955] [Warmup][Decode][128/144] batch_size:2 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:52:25 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:25 habana_model_runner.py:955] [Warmup][Decode][129/144] batch_size:1 seq_len:1152 free_mem:34.57 GiB
+INFO 06-19 07:52:25 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:26 habana_model_runner.py:955] [Warmup][Decode][130/144] batch_size:1 seq_len:1024 free_mem:34.57 GiB
+INFO 06-19 07:52:26 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:26 habana_model_runner.py:955] [Warmup][Decode][131/144] batch_size:2 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:26 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:26 habana_model_runner.py:955] [Warmup][Decode][132/144] batch_size:4 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:26 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:26 habana_model_runner.py:955] [Warmup][Decode][133/144] batch_size:8 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:26 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([8, 1])
+INFO 06-19 07:52:27 habana_model_runner.py:955] [Warmup][Decode][134/144] batch_size:1 seq_len:896 free_mem:34.57 GiB
+INFO 06-19 07:52:27 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:27 habana_model_runner.py:955] [Warmup][Decode][135/144] batch_size:1 seq_len:768 free_mem:34.57 GiB
+INFO 06-19 07:52:27 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:27 habana_model_runner.py:955] [Warmup][Decode][136/144] batch_size:2 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:27 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:27 habana_model_runner.py:955] [Warmup][Decode][137/144] batch_size:1 seq_len:640 free_mem:34.57 GiB
+INFO 06-19 07:52:27 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:28 habana_model_runner.py:955] [Warmup][Decode][138/144] batch_size:1 seq_len:512 free_mem:34.57 GiB
+INFO 06-19 07:52:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:28 habana_model_runner.py:955] [Warmup][Decode][139/144] batch_size:2 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:28 habana_model_runner.py:955] [Warmup][Decode][140/144] batch_size:4 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([4, 1])
+INFO 06-19 07:52:28 habana_model_runner.py:955] [Warmup][Decode][141/144] batch_size:1 seq_len:384 free_mem:34.57 GiB
+INFO 06-19 07:52:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:28 habana_model_runner.py:955] [Warmup][Decode][142/144] batch_size:1 seq_len:256 free_mem:34.57 GiB
+INFO 06-19 07:52:28 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:29 habana_model_runner.py:955] [Warmup][Decode][143/144] batch_size:2 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:29 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([2, 1])
+INFO 06-19 07:52:29 habana_model_runner.py:955] [Warmup][Decode][144/144] batch_size:1 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:29 habana_model_runner.py:868] not use graph: decode, input shape torch.Size([1, 1])
+INFO 06-19 07:52:29 habana_model_runner.py:966] Skipping prompt graph warmup...
+INFO 06-19 07:52:29 habana_model_runner.py:955] [Warmup][Graph/Decode][1/144] batch_size:256 seq_len:128 free_mem:34.57 GiB
+INFO 06-19 07:52:29 habana_model_runner.py:955] [Warmup][Graph/Decode][2/144] batch_size:256 seq_len:256 free_mem:33.99 GiB
+INFO 06-19 07:52:30 habana_model_runner.py:955] [Warmup][Graph/Decode][3/144] batch_size:256 seq_len:384 free_mem:33.41 GiB
+INFO 06-19 07:52:30 habana_model_runner.py:955] [Warmup][Graph/Decode][4/144] batch_size:256 seq_len:512 free_mem:32.83 GiB
+INFO 06-19 07:52:30 habana_model_runner.py:955] [Warmup][Graph/Decode][5/144] batch_size:256 seq_len:640 free_mem:32.25 GiB
+INFO 06-19 07:52:31 habana_model_runner.py:955] [Warmup][Graph/Decode][6/144] batch_size:256 seq_len:768 free_mem:31.67 GiB
+INFO 06-19 07:52:31 habana_model_runner.py:955] [Warmup][Graph/Decode][7/144] batch_size:256 seq_len:896 free_mem:31.09 GiB
+INFO 06-19 07:52:32 habana_model_runner.py:955] [Warmup][Graph/Decode][8/144] batch_size:256 seq_len:1024 free_mem:30.51 GiB
+INFO 06-19 07:52:32 habana_model_runner.py:955] [Warmup][Graph/Decode][9/144] batch_size:256 seq_len:1152 free_mem:29.93 GiB
+INFO 06-19 07:52:33 habana_model_runner.py:955] [Warmup][Graph/Decode][10/144] batch_size:256 seq_len:1280 free_mem:29.34 GiB
+INFO 06-19 07:52:33 habana_model_runner.py:955] [Warmup][Graph/Decode][11/144] batch_size:256 seq_len:1408 free_mem:28.76 GiB
+INFO 06-19 07:52:34 habana_model_runner.py:955] [Warmup][Graph/Decode][12/144] batch_size:256 seq_len:1536 free_mem:28.18 GiB
+INFO 06-19 07:52:34 habana_model_runner.py:955] [Warmup][Graph/Decode][13/144] batch_size:256 seq_len:1664 free_mem:27.59 GiB
+INFO 06-19 07:52:35 habana_model_runner.py:955] [Warmup][Graph/Decode][14/144] batch_size:256 seq_len:1792 free_mem:27.01 GiB
+INFO 06-19 07:52:36 habana_model_runner.py:955] [Warmup][Graph/Decode][15/144] batch_size:256 seq_len:1920 free_mem:26.42 GiB
+INFO 06-19 07:52:36 habana_model_runner.py:955] [Warmup][Graph/Decode][16/144] batch_size:256 seq_len:2048 free_mem:25.84 GiB
+INFO 06-19 07:52:37 habana_model_runner.py:955] [Warmup][Graph/Decode][17/144] batch_size:128 seq_len:128 free_mem:25.25 GiB
+INFO 06-19 07:52:37 habana_model_runner.py:955] [Warmup][Graph/Decode][18/144] batch_size:128 seq_len:256 free_mem:24.96 GiB
+INFO 06-19 07:52:38 habana_model_runner.py:955] [Warmup][Graph/Decode][19/144] batch_size:128 seq_len:384 free_mem:24.67 GiB
+INFO 06-19 07:52:38 habana_model_runner.py:955] [Warmup][Graph/Decode][20/144] batch_size:128 seq_len:512 free_mem:24.38 GiB
+INFO 06-19 07:52:38 habana_model_runner.py:955] [Warmup][Graph/Decode][21/144] batch_size:128 seq_len:640 free_mem:24.09 GiB
+INFO 06-19 07:52:38 habana_model_runner.py:955] [Warmup][Graph/Decode][22/144] batch_size:128 seq_len:768 free_mem:23.8 GiB
+INFO 06-19 07:52:39 habana_model_runner.py:955] [Warmup][Graph/Decode][23/144] batch_size:128 seq_len:896 free_mem:23.51 GiB
+INFO 06-19 07:52:39 habana_model_runner.py:955] [Warmup][Graph/Decode][24/144] batch_size:128 seq_len:1024 free_mem:23.22 GiB
+INFO 06-19 07:52:40 habana_model_runner.py:955] [Warmup][Graph/Decode][25/144] batch_size:128 seq_len:1152 free_mem:22.93 GiB
+INFO 06-19 07:52:40 habana_model_runner.py:955] [Warmup][Graph/Decode][26/144] batch_size:128 seq_len:1280 free_mem:22.64 GiB
+INFO 06-19 07:52:40 habana_model_runner.py:955] [Warmup][Graph/Decode][27/144] batch_size:128 seq_len:1408 free_mem:22.35 GiB
+INFO 06-19 07:52:41 habana_model_runner.py:955] [Warmup][Graph/Decode][28/144] batch_size:128 seq_len:1536 free_mem:22.06 GiB
+INFO 06-19 07:52:41 habana_model_runner.py:955] [Warmup][Graph/Decode][29/144] batch_size:128 seq_len:1664 free_mem:21.77 GiB
+INFO 06-19 07:52:42 habana_model_runner.py:955] [Warmup][Graph/Decode][30/144] batch_size:128 seq_len:1792 free_mem:21.48 GiB
+INFO 06-19 07:52:42 habana_model_runner.py:955] [Warmup][Graph/Decode][31/144] batch_size:128 seq_len:1920 free_mem:21.19 GiB
+INFO 06-19 07:52:42 habana_model_runner.py:955] [Warmup][Graph/Decode][32/144] batch_size:128 seq_len:2048 free_mem:20.9 GiB
+INFO 06-19 07:52:43 habana_model_runner.py:955] [Warmup][Graph/Decode][33/144] batch_size:64 seq_len:128 free_mem:20.61 GiB
+INFO 06-19 07:52:43 habana_model_runner.py:955] [Warmup][Graph/Decode][34/144] batch_size:64 seq_len:256 free_mem:20.46 GiB
+INFO 06-19 07:52:43 habana_model_runner.py:955] [Warmup][Graph/Decode][35/144] batch_size:64 seq_len:384 free_mem:20.32 GiB
+INFO 06-19 07:52:44 habana_model_runner.py:955] [Warmup][Graph/Decode][36/144] batch_size:64 seq_len:512 free_mem:20.17 GiB
+INFO 06-19 07:52:44 habana_model_runner.py:955] [Warmup][Graph/Decode][37/144] batch_size:64 seq_len:640 free_mem:20.03 GiB
+INFO 06-19 07:52:44 habana_model_runner.py:955] [Warmup][Graph/Decode][38/144] batch_size:64 seq_len:768 free_mem:19.88 GiB
+INFO 06-19 07:52:45 habana_model_runner.py:955] [Warmup][Graph/Decode][39/144] batch_size:64 seq_len:896 free_mem:19.74 GiB
+INFO 06-19 07:52:45 habana_model_runner.py:955] [Warmup][Graph/Decode][40/144] batch_size:64 seq_len:1024 free_mem:19.59 GiB
+INFO 06-19 07:52:45 habana_model_runner.py:955] [Warmup][Graph/Decode][41/144] batch_size:64 seq_len:1152 free_mem:19.45 GiB
+INFO 06-19 07:52:46 habana_model_runner.py:955] [Warmup][Graph/Decode][42/144] batch_size:64 seq_len:1280 free_mem:19.3 GiB
+INFO 06-19 07:52:46 habana_model_runner.py:955] [Warmup][Graph/Decode][43/144] batch_size:64 seq_len:1408 free_mem:19.16 GiB
+INFO 06-19 07:52:46 habana_model_runner.py:955] [Warmup][Graph/Decode][44/144] batch_size:64 seq_len:1536 free_mem:19.01 GiB
+INFO 06-19 07:52:47 habana_model_runner.py:955] [Warmup][Graph/Decode][45/144] batch_size:64 seq_len:1664 free_mem:18.87 GiB
+INFO 06-19 07:52:47 habana_model_runner.py:955] [Warmup][Graph/Decode][46/144] batch_size:64 seq_len:1792 free_mem:18.72 GiB
+INFO 06-19 07:52:47 habana_model_runner.py:955] [Warmup][Graph/Decode][47/144] batch_size:64 seq_len:1920 free_mem:18.58 GiB
+INFO 06-19 07:52:48 habana_model_runner.py:955] [Warmup][Graph/Decode][48/144] batch_size:64 seq_len:2048 free_mem:18.43 GiB
+INFO 06-19 07:52:48 habana_model_runner.py:955] [Warmup][Graph/Decode][49/144] batch_size:32 seq_len:128 free_mem:18.29 GiB
+INFO 06-19 07:52:48 habana_model_runner.py:955] [Warmup][Graph/Decode][50/144] batch_size:32 seq_len:256 free_mem:18.22 GiB
+INFO 06-19 07:52:49 habana_model_runner.py:955] [Warmup][Graph/Decode][51/144] batch_size:32 seq_len:384 free_mem:18.14 GiB
+INFO 06-19 07:52:49 habana_model_runner.py:955] [Warmup][Graph/Decode][52/144] batch_size:32 seq_len:512 free_mem:18.07 GiB
+INFO 06-19 07:52:49 habana_model_runner.py:955] [Warmup][Graph/Decode][53/144] batch_size:32 seq_len:640 free_mem:18 GiB
+INFO 06-19 07:52:49 habana_model_runner.py:955] [Warmup][Graph/Decode][54/144] batch_size:32 seq_len:768 free_mem:17.93 GiB
+INFO 06-19 07:52:50 habana_model_runner.py:955] [Warmup][Graph/Decode][55/144] batch_size:32 seq_len:896 free_mem:17.85 GiB
+INFO 06-19 07:52:50 habana_model_runner.py:955] [Warmup][Graph/Decode][56/144] batch_size:32 seq_len:1024 free_mem:17.78 GiB
+INFO 06-19 07:52:50 habana_model_runner.py:955] [Warmup][Graph/Decode][57/144] batch_size:32 seq_len:1152 free_mem:17.71 GiB
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1280, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1408, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1536, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1664, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1792, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 1920, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 32, seq_len: 2048, memory estimated: 78028018.23873146
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 128, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 256, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 384, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 512, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 640, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 768, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 896, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1024, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1152, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1280, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1408, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1536, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1664, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1792, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 1920, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 16, seq_len: 2048, memory estimated: 39014009.11936573
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 128, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 256, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 384, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 512, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 640, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 768, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 896, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1024, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1152, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1280, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1408, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1536, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1664, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1792, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 1920, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 8, seq_len: 2048, memory estimated: 19507004.559682865
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 128, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 256, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 384, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 512, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 640, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 768, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 896, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1024, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1152, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1280, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1408, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1536, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1664, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1792, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 1920, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 4, seq_len: 2048, memory estimated: 9753502.279841432
+INFO 06-19 07:52:51 habana_model_runner.py:955] [Warmup][Graph/Decode][113/144] batch_size:2 seq_len:128 free_mem:17.64 GiB
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 256, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 384, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 512, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 640, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 768, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 896, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1024, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1152, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1280, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1408, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1536, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1664, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1792, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 1920, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 2, seq_len: 2048, memory estimated: 4876748.269677089
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 128, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 256, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 384, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 512, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 640, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 768, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 896, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1024, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1152, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1280, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1408, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1536, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1664, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1792, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 1920, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:989] warmup skipped: is_prompt: False, batch_size: 1, seq_len: 2048, memory estimated: 2438374.1348385443
+INFO 06-19 07:52:51 habana_model_runner.py:1000] Graph/Decode captured:58 (40.3%) used_mem:16.94 GiB buckets:[(2, 128), (32, 128), (32, 256), (32, 384), (32, 512), (32, 640), (32, 768), (32, 896), (32, 1024), (32, 1152), (64, 128), (64, 256), (64, 384), (64, 512), (64, 640), (64, 768), (64, 896), (64, 1024), (64, 1152), (64, 1280), (64, 1408), (64, 1536), (64, 1664), (64, 1792), (64, 1920), (64, 2048), (128, 128), (128, 256), (128, 384), (128, 512), (128, 640), (128, 768), (128, 896), (128, 1024), (128, 1152), (128, 1280), (128, 1408), (128, 1536), (128, 1664), (128, 1792), (128, 1920), (128, 2048), (256, 128), (256, 256), (256, 384), (256, 512), (256, 640), (256, 768), (256, 896), (256, 1024), (256, 1152), (256, 1280), (256, 1408), (256, 1536), (256, 1664), (256, 1792), (256, 1920), (256, 2048)]
+INFO 06-19 07:52:51 habana_model_runner.py:1028] Warmup finished in 144 secs, allocated 16.95 GiB of device memory
+INFO 06-19 07:52:51 habana_executor.py:83] init_cache_engine took 57.53 GiB of device memory (76.99 GiB/94.62 GiB used) and 1.323 GiB of host memory (9.628 GiB/108.1 GiB used)
+INFO 06-19 07:52:51 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:52:51 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:52:52 habana_model_runner.py:313] not use graph for prompt...
+INFO 06-19 07:52:52 habana_model_runner.py:313] not use graph for prompt...
+Throughput: 171.50 requests/s, 22123.86 tokens/s

@@ -308,8 +308,14 @@ class HabanaModelRunner:
             self.model = self.lora_manager.create_lora_manager(self.model)
 
     def _use_graphs(self, batch_size, seq_len, is_prompt):
+        if is_prompt:
+            if os.environ.get('VLLM_LIMIT_GRAPH', 'false').lower() == 'true':
+                logger.info("not use graph for prompt...")
+                return
+        
         if self.enforce_eager:
             return False
+
         return (batch_size, seq_len, is_prompt) in self.graphed_buckets
 
     def _setup_buckets(self) -> None:
@@ -854,6 +860,13 @@ class HabanaModelRunner:
             model_event_name = f"model_{'prompt' if is_prompt else 'decode'}_bs{batch_size}_seq{seq_len}_graphs{'T' if use_graphs else 'F'}"
         else:
             model_event_name = 'model_executable'
+        
+        if use_graphs == False:
+            if is_prompt:
+                logger.info(f"not use graph: prompt, input shape {input_tokens.shape}")
+            if not is_prompt:
+                logger.info(f"not use graph: decode, input shape {input_tokens.shape}")
+
         with self.profiler.record_event('internal', model_event_name):
             hidden_states = self.model.forward(**execute_model_kwargs, selected_token_indices=sampling_metadata.selected_token_indices, bypass_hpu_graphs=not use_graphs)
 
@@ -948,6 +961,11 @@ class HabanaModelRunner:
             self.warmup_scenario(batch_size, seq_len, is_prompt, kv_caches)
 
     def warmup_graphs(self, strategy, buckets, is_prompt, kv_caches, available_mem):
+        if is_prompt:
+            if os.environ.get('VLLM_LIMIT_GRAPH', 'false').lower() == 'true':
+                logger.info("Skipping prompt graph warmup...")
+                return
+
         total_batch_seq = 0.001
         total_mem = 0
         idx = 0
@@ -962,11 +980,13 @@ class HabanaModelRunner:
             raise NotImplementedError(f'Unsupported graph allocation strategy: {strategy}')
         buckets = list(sorted(buckets, key=ordering))
 
+
         for idx, (batch_size, seq_len) in enumerate(buckets):
             # Graph memory usage is proportional to seq dimension in a batch
             batch_seq = batch_size * seq_len if is_prompt else batch_size
             mem_estimate = batch_seq / total_batch_seq * total_mem
             if mem_estimate >= available_mem:
+                logger.info(f"warmup skipped: is_prompt: {is_prompt}, batch_size: {batch_size}, seq_len: {seq_len}, memory estimated: {mem_estimate}")
                 continue
             self.graphed_buckets.add((batch_size, seq_len, is_prompt))
             self.log_warmup(phase, idx, num_candidates, batch_size, seq_len)

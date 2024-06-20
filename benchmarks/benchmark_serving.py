@@ -59,6 +59,7 @@ def sample_sharegpt_requests(
     num_requests: int,
     tokenizer: PreTrainedTokenizerBase,
     fixed_output_len: Optional[int] = None,
+    max_tokens = 8192,
 ) -> List[Tuple[str, int, int]]:
     if fixed_output_len is not None and fixed_output_len < 4:
         raise ValueError("output_len too small")
@@ -85,14 +86,16 @@ def sample_sharegpt_requests(
         prompt = dataset[i][0]
         prompt_token_ids = tokenizer(prompt).input_ids
         completion = dataset[i][1]
+
         completion_token_ids = tokenizer(completion).input_ids
         prompt_len = len(prompt_token_ids)
-        output_len = len(completion_token_ids
-                         ) if fixed_output_len is None else fixed_output_len
+        output_len = (max_tokens - prompt_len) if fixed_output_len is None else fixed_output_len
+        print("prompt_len, output_len: ", prompt_len, output_len)
+
         if prompt_len < 4 or output_len < 4:
             # Prune too short sequences.
             continue
-        if prompt_len > 1024 or prompt_len + output_len > 2048:
+        if prompt_len > 10240 or prompt_len + output_len > 20480:
             # Prune too long sequences.
             continue
         filtered_dataset.append((prompt, prompt_len, output_len))
@@ -115,6 +118,9 @@ def sample_sonnet_requests(
     # Load the dataset.
     with open(dataset_path) as f:
         poem_lines = f.readlines()
+
+    # WA: fix sampling failure for 8192
+    poem_lines.extend(poem_lines.copy())
 
     # Tokenize the poem lines.
     poem_token_ids = tokenizer(poem_lines).input_ids
@@ -164,6 +170,7 @@ def sample_sonnet_requests(
         prompt_formatted = tokenizer.apply_chat_template(
             message, add_generation_prompt=True, tokenize=False)
         prompt_len = len(tokenizer(prompt_formatted).input_ids)
+
         sampled_requests.append(
             (prompt, prompt_formatted, prompt_len, output_len))
 
@@ -209,6 +216,7 @@ def calculate_metrics(
             ttfts.append(outputs[i].ttft)
             completed += 1
         else:
+            print(outputs[i])
             actual_output_lens.append(0)
 
     metrics = BenchmarkMetrics(

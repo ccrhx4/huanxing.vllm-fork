@@ -60,9 +60,20 @@ def warmup_range(config: Tuple[int, int, int]):
     stable = range(bstep, bmax + 1, bstep)
     return list(ramp_up) + list(stable)
 
+def batch_size_bucket(config: Tuple[int, int, int]):
+    bmin, bstep, bmax = config
+
+    buckets = []
+    bucket = bmin
+
+    while bucket <= bmax:
+        buckets.append(bucket)
+        bucket = bucket * 2
+
+    return list(buckets)
 
 def warmup_buckets(bs_bucket_config, seq_bucket_config):
-    buckets = itertools.product(warmup_range(bs_bucket_config), warmup_range(seq_bucket_config))
+    buckets = itertools.product(batch_size_bucket(bs_bucket_config), warmup_range(seq_bucket_config))
     return list(sorted(buckets, key=lambda b: (b[0] * b[1], b[1], b[0])))
 
 
@@ -322,7 +333,7 @@ class HabanaModelRunner:
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt', 'bs', min=1, step=32, max=min(self.max_num_seqs, 64))
         self.decode_bs_bucket_cfg = read_bucket_settings('decode', 'bs', min=1, step=128, max=self.max_num_seqs)
         self.prompt_seq_bucket_cfg = read_bucket_settings('prompt', 'seq', min=self.block_size, step=self.block_size, max=1024)
-        self.decode_seq_bucket_cfg = read_bucket_settings('decode', 'seq', min=self.block_size, step=self.block_size, max=2048)
+        self.decode_seq_bucket_cfg = read_bucket_settings('decode', 'seq', min=self.block_size, step=self.block_size, max=4096)
         self.graphed_buckets = set()
 
         logger.info(f"Prompt bucket config (min, step, max_warmup) bs:{self.prompt_bs_bucket_cfg}, seq:{self.prompt_seq_bucket_cfg}")
@@ -865,7 +876,7 @@ class HabanaModelRunner:
             if is_prompt:
                 logger.info(f"not use graph: prompt, input shape {input_tokens.shape}")
             if not is_prompt:
-                logger.info(f"not use graph: decode, input shape {input_tokens.shape}")
+                logger.info(f"not use graph: decode, input shape {input_tokens.shape}, sel_len {seq_len}")
 
         with self.profiler.record_event('internal', model_event_name):
             hidden_states = self.model.forward(**execute_model_kwargs, selected_token_indices=sampling_metadata.selected_token_indices, bypass_hpu_graphs=not use_graphs)
@@ -1016,7 +1027,7 @@ class HabanaModelRunner:
             free_mem = align_workers(free_mem, torch.distributed.ReduceOp.MIN)
             prompt_graph_mem_ratio = float(os.environ.get('VLLM_GRAPH_PROMPT_RATIO', '0.5'))
             prompt_available_memory = prompt_graph_mem_ratio * free_mem
-            decode_available_memory = free_mem - prompt_available_memory
+            decode_available_memory = free_mem
             prompt_strategy = 'min_tokens'
             decode_strategy = os.environ.get('VLLM_GRAPH_DECODE_STRATEGY', 'max_bs')
             self.warmup_graphs(prompt_strategy, self.prompt_buckets, True, kv_caches, prompt_available_memory)

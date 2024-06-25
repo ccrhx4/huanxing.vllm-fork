@@ -1,0 +1,26 @@
+vllm/vllm-openai                                v0.5.0.post1
+
+server
+python3 -m vllm.entrypoints.openai.api_server --model meta-llama/Meta-Llama-3-8B  --dtype bfloat16 --disable-log-requests
+
+root@b6c805710d73:/vllm-workspace/huanxing.vllm-fork/benchmarks# python3 benchmark_serving_origin.py         --backend vllm --model meta-llama/Meta-Llama-3-8B   --num-prompts 256 --request-rate 2.53  --base-url http://0.0.0.0:8000 --dataset-name sharegpt --dataset-path ./ShareGPT_V3_unfiltered_cleaned_split.json --sharegpt-output-len 1024
+Namespace(backend='vllm', base_url='http://0.0.0.0:8000', host='localhost', port=8000, endpoint='/v1/completions', dataset=None, dataset_name='sharegpt', dataset_path='./ShareGPT_V3_unfiltered_cleaned_split.json', model='meta-llama/Meta-Llama-3-8B', tokenizer=None, best_of=1, use_beam_search=False, num_prompts=256, sharegpt_output_len=1024, sonnet_input_len=550, sonnet_output_len=150, sonnet_prefix_len=200, request_rate=2.53, seed=0, trust_remote_code=False, disable_tqdm=False, save_result=False, metadata=None, result_dir=None)
+Special tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.
+Traffic request rate: 2.53
+============ Serving Benchmark Result ============
+Successful requests:                     256       
+Benchmark duration (s):                  114.80    
+Total input tokens:                      56983     
+Total generated tokens:                  114619    
+Request throughput (req/s):              2.23      
+Input token throughput (tok/s):          496.37    
+Output token throughput (tok/s):         998.44    
+---------------Time to First Token----------------
+Mean TTFT (ms):                          27.86     
+Median TTFT (ms):                        27.55     
+P99 TTFT (ms):                           107.72    
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          24.17     
+Median TPOT (ms):                        24.07     
+P99 TPOT (ms):                           31.18     
+==================================================

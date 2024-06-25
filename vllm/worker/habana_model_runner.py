@@ -91,10 +91,8 @@ def round_up(value: int, k: int):
 
 def find_bucket(value: int, config: Tuple[int, int, int]):
     bmin, bstep, bmax = config
-    if value < bstep:
-        result = min(next_pow2(value), bstep)
-    else:
-        result = round_up(value, bstep)
+    result = next_pow2(value)
+    
     return result
 
 

@@ -63,12 +63,12 @@ def warmup_range(config: Tuple[int, int, int]):
 def batch_size_bucket(config: Tuple[int, int, int]):
     bmin, bstep, bmax = config
 
-    buckets = []
-    bucket = bmin
+    buckets = [1, 2, 4]
+    bucket = 8
 
     while bucket <= bmax:
         buckets.append(bucket)
-        bucket = bucket * 2
+        bucket = bucket + 8
 
     return list(buckets)
 
@@ -84,6 +84,15 @@ def next_pow2(value: int):
         res *= 2
     return res
 
+def next_8(value: int):
+    if value <= 2:
+        return value
+
+    if value <= 8:
+        return 8
+
+    value = round_up(value, 8)
+    return value * 8
 
 def round_up(value: int, k: int):
     return (value + k - 1) // k * k
@@ -91,8 +100,11 @@ def round_up(value: int, k: int):
 
 def find_bucket(value: int, config: Tuple[int, int, int]):
     bmin, bstep, bmax = config
-    result = next_pow2(value)
-    
+    if value < bstep:
+        result = min(next_pow2(value), bstep)
+    else:
+        result = round_up(value, bstep)
+
     return result
 
 
@@ -329,7 +341,7 @@ class HabanaModelRunner:
 
     def _setup_buckets(self) -> None:
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt', 'bs', min=1, step=32, max=min(self.max_num_seqs, 64))
-        self.decode_bs_bucket_cfg = read_bucket_settings('decode', 'bs', min=1, step=128, max=self.max_num_seqs)
+        self.decode_bs_bucket_cfg = read_bucket_settings('decode', 'bs', min=1, step=8, max=96)
         self.prompt_seq_bucket_cfg = read_bucket_settings('prompt', 'seq', min=self.block_size, step=self.block_size, max=1024)
         self.decode_seq_bucket_cfg = read_bucket_settings('decode', 'seq', min=self.block_size, step=self.block_size, max=4096)
         self.graphed_buckets = set()
@@ -479,6 +491,7 @@ class HabanaModelRunner:
 
         max_prompt_block_table_len = max(len(t) for t in prefix_block_tables)
         max_prompt_len = max(find_bucket(max(seq_lens), self.prompt_seq_bucket_cfg), self.block_size)
+        print(max_prompt_len)
 
         input_tokens = make_tensor_with_pad(input_tokens,
                                             max_prompt_len,
@@ -841,6 +854,9 @@ class HabanaModelRunner:
             bucket_cfg = self.prompt_bs_bucket_cfg if is_prompt else self.decode_bs_bucket_cfg
             batch_size_padded = find_bucket(real_batch_size, bucket_cfg)
             batch_size_padding = batch_size_padded - real_batch_size
+
+            logger.info(f"batch size, padded batch size: {real_batch_size} , {batch_size_padded}")
+
             seq_group_metadata_list = seq_group_metadata_list.copy()
             seq_group_metadata_list.extend(seq_group_metadata_list[0] for _ in range(batch_size_padding))
         with self.profiler.record_event('internal', 'prepare_input_tensors'):

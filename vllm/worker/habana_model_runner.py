@@ -341,7 +341,7 @@ class HabanaModelRunner:
 
     def _setup_buckets(self) -> None:
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt', 'bs', min=1, step=32, max=min(self.max_num_seqs, 64))
-        self.decode_bs_bucket_cfg = read_bucket_settings('decode', 'bs', min=1, step=8, max=96)
+        self.decode_bs_bucket_cfg = read_bucket_settings('decode', 'bs', min=1, step=8, max=256)
         self.prompt_seq_bucket_cfg = read_bucket_settings('prompt', 'seq', min=self.block_size, step=self.block_size, max=1024)
         self.decode_seq_bucket_cfg = read_bucket_settings('decode', 'seq', min=self.block_size, step=self.block_size, max=4096)
         self.graphed_buckets = set()
@@ -955,18 +955,23 @@ class HabanaModelRunner:
         )
 
     def profile_run(self) -> None:
+        free_mem = format_bytes(HabanaMemoryProfiler.current_free_device_memory())
+        logger.info(f"before profile run: free_mem:{free_mem}")
+        
         num_layers = self.model_config.get_num_layers(self.parallel_config)
         kv_caches = [None] * num_layers
         max_batch_size = self.prompt_bs_bucket_cfg[-1]
         max_seq_len = self.prompt_seq_bucket_cfg[-1]
 
         self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches)
+        free_mem = format_bytes(HabanaMemoryProfiler.current_free_device_memory())
+        logger.info(f"after profile run: free_mem:{free_mem}")
 
     def warmup_scenario(self, batch_size, seq_len, is_prompt, kv_caches) -> None:
         use_graphs = self._use_graphs(batch_size, seq_len, is_prompt)
         scenario_name = f"warmup_{'prompt' if is_prompt else 'decode'}_bs{batch_size}_seq{seq_len}_graphs{'T' if use_graphs else 'F'}"
         self.profiler.start('internal', scenario_name)
-        times = 3 if use_graphs else 1
+        times = 1 if use_graphs else 1
         seqs = [self.create_dummy_seq_group_metadata(i, seq_len, is_prompt) for i in range(batch_size)]
         torch.hpu.synchronize()
         for _ in range(times):
@@ -980,10 +985,14 @@ class HabanaModelRunner:
         logger.info(f"[Warmup][{phase}][{i+1}/{max_i}] batch_size:{batch_size} seq_len:{seq_len} free_mem:{free_mem}")
 
     def warmup_all_buckets(self, buckets, is_prompt, kv_caches):
+        free_mem = format_bytes(HabanaMemoryProfiler.current_free_device_memory())
+        logger.info(f"before warmup buckets: free_mem:{free_mem}")
         for i, (batch_size, seq_len) in enumerate(reversed(buckets)):
             mem_usage = 100.0 * HabanaMemoryProfiler.current_device_memory_usage() / HabanaMemoryProfiler.total_device_memory()
             self.log_warmup('Prompt' if is_prompt else 'Decode', i, len(buckets), batch_size, seq_len)
             self.warmup_scenario(batch_size, seq_len, is_prompt, kv_caches)
+        free_mem = format_bytes(HabanaMemoryProfiler.current_free_device_memory())
+        logger.info(f"after warmup_buckets: free_mem:{free_mem}")
 
     def warmup_graphs(self, strategy, buckets, is_prompt, kv_caches, available_mem):
         if is_prompt:
@@ -1058,4 +1067,4 @@ class HabanaModelRunner:
         return self.model_config.get_vocab_size()
 
 def _maybe_wrap_in_hpu_graph(model):
-    return htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(model)) if htorch.utils.internal.is_lazy() else HpuModelAdapter(model)
+    return htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(model), disable_tensor_cache=True) if htorch.utils.internal.is_lazy() else HpuModelAdapter(model)

@@ -63,8 +63,12 @@ def warmup_range(config: Tuple[int, int, int]):
 def batch_size_bucket(config: Tuple[int, int, int]):
     bmin, bstep, bmax = config
 
-    buckets = [1, 2, 4]
-    bucket = 8
+    if bmin > 8:
+        buckets = []
+        bucket = bmin
+    else:
+        buckets = [1, 2, 4]
+        bucket = 8
 
     while bucket <= bmax:
         buckets.append(bucket)
@@ -855,7 +859,7 @@ class HabanaModelRunner:
             batch_size_padded = find_bucket(real_batch_size, bucket_cfg)
             batch_size_padding = batch_size_padded - real_batch_size
 
-            logger.info(f"batch size, padded batch size: {real_batch_size} , {batch_size_padded}")
+            logger.debug(f"batch size, padded batch size: {real_batch_size} , {batch_size_padded}")
 
             seq_group_metadata_list = seq_group_metadata_list.copy()
             seq_group_metadata_list.extend(seq_group_metadata_list[0] for _ in range(batch_size_padding))

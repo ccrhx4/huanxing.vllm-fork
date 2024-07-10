@@ -540,6 +540,55 @@ def create_kv_caches_with_random(
         value_caches.append(value_cache)
     return key_caches, value_caches
 
+def create_kv_caches_with_random_hpu(
+    num_blocks: int,
+    block_size: int,
+    num_layers: int,
+    num_heads: int,
+    head_size: int,
+    cache_dtype: Optional[Union[str, torch.dtype]],
+    model_dtype: Optional[Union[str, torch.dtype]] = None,
+    seed: int = 0,
+    device: Optional[str] = "cuda",
+) -> tuple[list[torch.tensor], list[torch.tensor]]:
+    torch.random.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+
+    torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
+
+    scale = head_size**-0.5
+    key_cache_shape = (num_blocks, block_size, num_heads, head_size)
+    key_caches: list[torch.tensor] = []
+    for _ in range(num_layers):
+        key_cache = torch.empty(size=key_cache_shape,
+                                dtype=torch_dtype,
+                                device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            key_cache.uniform_(-scale, scale)
+        elif cache_dtype == 'fp8':
+            _generate_random_fp8(key_cache, -scale, scale)
+        else:
+            raise valueerror(
+                f"does not support key cache of type {cache_dtype}")
+        key_caches.append(key_cache)
+
+    value_cache_shape = (num_blocks, block_size, num_heads, head_size)
+    value_caches: list[torch.tensor] = []
+    for _ in range(num_layers):
+        value_cache = torch.empty(size=value_cache_shape,
+                                  dtype=torch_dtype,
+                                  device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            value_cache.uniform_(-scale, scale)
+        elif cache_dtype == 'fp8':
+            _generate_random_fp8(value_cache, -scale, scale)
+        else:
+            raise valueerror(
+                f"does not support value cache of type {cache_dtype}")
+        value_caches.append(value_cache)
+    return key_caches, value_caches
+
 
 @lru_cache
 def print_warning_once(msg: str) -> None:

@@ -6,16 +6,64 @@ from typing import (Any, AsyncIterator, Awaitable, Callable, Dict, Generic,
                     Union)
 
 import torch
-from vllm.utils import get_max_shared_memory_bytes, is_hip, is_hpu
-
-if is_hpu():
-    from vllm.hpu import ops, cache_ops
-
 from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, FlexibleArgumentParser,
-        create_kv_caches_with_random_hpu)
+                        get_kv_cache_torch_dtype)
+
+if torch.cuda.is_available():
+    from vllm_flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
 
 NUM_BLOCKS = 2580
 PARTITION_SIZE = 512
+
+
+def create_kv_caches_with_random(
+    num_blocks: int,
+    block_size: int,
+    num_layers: int,
+    num_heads: int,
+    head_size: int,
+    cache_dtype: Optional[Union[str, torch.dtype]],
+    model_dtype: Optional[Union[str, torch.dtype]] = None,
+    seed: int = 0,
+    device: Optional[str] = "cuda",
+) -> tuple[list[torch.tensor], list[torch.tensor]]:
+    torch.random.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+
+    torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
+
+    scale = head_size**-0.5
+    key_cache_shape = (num_blocks, block_size, num_heads, head_size)
+    key_caches: list[torch.tensor] = []
+    for _ in range(num_layers):
+        key_cache = torch.empty(size=key_cache_shape,
+                                dtype=torch_dtype,
+                                device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            key_cache.uniform_(-scale, scale)
+        elif cache_dtype == 'fp8':
+            _generate_random_fp8(key_cache, -scale, scale)
+        else:
+            raise valueerror(
+                f"does not support key cache of type {cache_dtype}")
+        key_caches.append(key_cache)
+
+    value_cache_shape = (num_blocks, block_size, num_heads, head_size)
+    value_caches: list[torch.tensor] = []
+    for _ in range(num_layers):
+        value_cache = torch.empty(size=value_cache_shape,
+                                  dtype=torch_dtype,
+                                  device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            value_cache.uniform_(-scale, scale)
+        elif cache_dtype == 'fp8':
+            _generate_random_fp8(value_cache, -scale, scale)
+        else:
+            raise valueerror(
+                f"does not support value cache of type {cache_dtype}")
+        value_caches.append(value_cache)
+    return key_caches, value_caches
 
 @torch.inference_mode()
 def main(
@@ -35,6 +83,13 @@ def main(
 ) -> None:
     random.seed(seed)
     torch.random.manual_seed(seed)
+
+    if device == "hpu":
+        from vllm.utils import get_max_shared_memory_bytes, is_hip, is_hpu
+        from vllm.hpu import ops, cache_ops
+        import habana_frameworks.torch as ht
+        from vllm.utils import create_kv_caches_with_random_hpu
+
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
     elif is_hpu():
@@ -76,15 +131,16 @@ def main(
                                 device=device)
 
     # Create the KV cache.
-    key_caches, value_caches = create_kv_caches_with_random_hpu(NUM_BLOCKS,
-                                                            block_size,
-                                                            1,
-                                                            num_kv_heads,
-                                                            head_size,
-                                                            kv_cache_dtype,
-                                                            dtype,
-                                                            seed,
-                                                            device=device)
+    key_caches, value_caches = create_kv_caches_with_random(NUM_BLOCKS,
+                                                        block_size,
+                                                        1,
+                                                        num_kv_heads,
+                                                        head_size,
+                                                        kv_cache_dtype,
+                                                        dtype,
+                                                        seed,
+                                                        device=device)
+
     key_cache, value_cache = key_caches[0], value_caches[0]
 
     # Prepare for the paged attention kernel.
@@ -102,33 +158,102 @@ def main(
             device=output.device,
         )
         max_logits = torch.empty_like(exp_sums)
+    
+    # Using default kv_scale
+    kv_scale = 1.0
 
+    #prepare for HPU graph mode
+    if not torch.cuda.is_available():
+        hpu_stream = ht.hpu.Stream()
+        cache = {}
+
+    def page_attention_capture_replay(
+            query,
+            key_cache,
+            value_cache,
+            num_kv_heads,
+            scale,
+            block_tables,
+            seq_lens,
+            block_size,
+            alibi_slopes,
+            kv_cache_dtype,
+    ):
+        inputs = [
+            query,
+            key_cache,
+            value_cache,
+            num_kv_heads,
+            scale,
+            block_tables,
+            seq_lens,
+            block_size,
+            alibi_slopes,
+            kv_cache_dtype,
+        ]
+
+        h = ht.hpu.graphs.input_hash(inputs)
+        cached = cache.get(h)
+
+        if cached is None:
+            with ht.hpu.stream(hpu_stream):
+                graph = ht.hpu.HPUGraph()
+                graph.capture_begin()
+                outputs = ops.paged_attention_v1(
+                    query,
+                    key_cache,
+                    value_cache,
+                    num_kv_heads,
+                    scale,
+                    block_tables,
+                    seq_lens,
+                    block_size,
+                    alibi_slopes,
+                    kv_cache_dtype,
+                )
+                graph.capture_end()
+                graph_inputs = inputs
+                graph_outputs = outputs
+                cache[h] = ht.hpu.graphs.CachedParams(graph_inputs, graph_outputs, graph)
+            
+            return outputs
+        
+        ht.hpu.graphs.copy_to(cached.graph_inputs, inputs)
+        cached.graph.replay()
+        ht.core.hpu.default_stream().synchronize()
+
+        return cached.graph_outputs
+
+    def run_cuda_benchmark(num_iters: int, profile: bool = False) -> float:
+        torch.cuda.synchronize()
+        start_time = time.perf_counter()
+
+        for _ in range(num_iters):
+            output = flash_attn_with_kvcache(
+                query.unsqueeze(1),
+                key_cache,
+                value_cache,
+                cache_seqlens=seq_lens,
+                block_table=block_tables,
+                softmax_scale=scale,
+                causal=True,
+                alibi_slopes=alibi_slopes,
+            )
+        
+        torch.cuda.synchronize()
+
+        end_time = time.perf_counter()
+        return (end_time - start_time) / num_iters
+            
     def run_hpu_benchmark(num_iters: int, profile: bool = False) -> float:
         if is_hpu():
             torch.hpu.synchronize()
-        else:
-            torch.cuda.synchronize()
-        
-        if profile:
-            if not is_hpu():
-                torch.cuda.cudart().cudaProfilerStart()
-        
-        start_time = time.perf_counter()
 
-        # Using default kv_scale
-        kv_scale = 1.0
+        start_time = time.perf_counter()
 
         for _ in range(num_iters):
             if is_hpu():
-                print("query: ", query.shape)
-                print("key_cache: ", key_cache.shape)
-                print("value_cache: ", value_cache.shape)
-                print("num_kv_heads: ", num_kv_heads)
-                print("block_tables: ", block_tables.shape)
-                print("seq_length: ", seq_lens)
-                
-                output = torch.empty_like(query)
-                output = ops.paged_attention_v1(
+                output = page_attention_capture_replay(
                     query,
                     key_cache,
                     value_cache,
@@ -139,60 +264,28 @@ def main(
                     block_size,
                     alibi_slopes,
                     kv_cache_dtype,
-                )
-            elif version == "v1":
-                ops.paged_attention_v1(
-                    output,
-                    query,
-                    key_cache,
-                    value_cache,
-                    num_kv_heads,
-                    scale,
-                    block_tables,
-                    seq_lens,
-                    block_size,
-                    max_seq_len,
-                    alibi_slopes,
-                    kv_cache_dtype,
-                    kv_scale,
-                )
-            elif version == "v2":
-                ops.paged_attention_v2(
-                    output,
-                    exp_sums,
-                    max_logits,
-                    tmp_output,
-                    query,
-                    key_cache,
-                    value_cache,
-                    num_kv_heads,
-                    scale,
-                    block_tables,
-                    seq_lens,
-                    block_size,
-                    max_seq_len,
-                    alibi_slopes,
-                    kv_cache_dtype,
-                    kv_scale,
                 )
             else:
                 raise ValueError(f"Invalid version: {version}")
         if is_hpu():
             torch.hpu.synchronize()
-        else:
-            torch.cuda.synchronize()
 
         end_time = time.perf_counter()
-        if profile:
-            torch.cuda.cudart().cudaProfilerStart()
         return (end_time - start_time) / num_iters
 
     # Warmup.
     print("Warming up...")
-    run_benchmark = run_hpu_benchmark
-    run_benchmark(num_iters=3, profile=False)
+    
+    if torch.cuda.is_available():
+        run_benchmark = run_cuda_benchmark
+    else:
+        run_benchmark = run_hpu_benchmark
+
+    latency = run_benchmark(num_iters=3, profile=False)
+    print(f"Kernel warmup time: {latency * 1000000:.3f} us")
 
     # Benchmark.
+    print("Start benchmarking...")
     if do_profile:
         latency = run_benchmark(num_iters=1, profile=True)
     else:
@@ -207,6 +300,8 @@ if __name__ == '__main__':
                         type=str,
                         choices=["v1", "v2"],
                         default="v1")
+    
+    parser.add_argument("--device", type=str, default="hpu")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--seq-len", type=int, default=4096)
     parser.add_argument("--num-query-heads", type=int, default=32)
@@ -249,4 +344,5 @@ if __name__ == '__main__':
         seed=args.seed,
         do_profile=args.profile,
         kv_cache_dtype=args.kv_cache_dtype,
+        device=args.device,
     )

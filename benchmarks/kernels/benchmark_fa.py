@@ -74,6 +74,7 @@ def main(
     seq_len: int,
     num_query_heads: int,
     num_kv_heads: int,
+    hidden_size: int,
     head_size: int,
     use_alibi: bool,
     block_size: int,
@@ -106,6 +107,27 @@ def main(
                         dtype=dtype,
                         device=device)
     query.uniform_(-scale, scale)
+    
+    key = torch.empty(num_seqs,
+                        num_kv_heads,
+                        head_size,
+                        dtype=dtype,
+                        device=device)
+
+    key.uniform_(-scale, scale)
+    
+    value = torch.empty(num_seqs,
+                        num_kv_heads,
+                        head_size,
+                        dtype=dtype,
+                        device=device)
+
+    value.uniform_(-scale, scale)
+
+
+    print("query shape: ", query.shape)
+    print("query shape: ", key.shape)
+    print("query shape: ", value.shape)
 
     assert num_query_heads % num_kv_heads == 0
     alibi_slopes = None
@@ -115,18 +137,28 @@ def main(
                                    device=device)
 
     seq_lens = [seq_len for _ in range(num_seqs)]
+    print(seq_lens)
+
     max_seq_len = max(seq_lens)
     seq_lens = torch.tensor(seq_lens, dtype=torch.int, device=device)
 
     # Create the block tables.
     max_num_blocks_per_seq = (max_seq_len + block_size - 1) // block_size
     block_tables_lst: List[List[int]] = []
+    block_indices = []
+    block_offsets = []
+    position = max_seq_len - 1
+
     for _ in range(num_seqs):
         block_table = [
             random.randint(0, NUM_BLOCKS - 1)
             for _ in range(max_num_blocks_per_seq)
         ]
         block_tables_lst.append(block_table)
+        block_indice = block_table[position // block_size]
+        block_offset = position % block_size
+        block_indices.append(block_indice)
+        block_offsets.append(block_offset)
 
     #block_tables = torch.tensor(block_tables_lst,
     #                            dtype=torch.int,
@@ -134,14 +166,16 @@ def main(
 
     blocks_used = [len(bt) for bt in block_tables_lst]
     block_list = list(itertools.chain(*block_tables_lst))
+    block_list = torch.tensor(block_list, dtype=torch.int, device=device)
+    
     block_mapping = [[i] * bu for i, bu in enumerate(blocks_used)]
     block_mapping = list(itertools.chain(*block_mapping))
 
-    print(block_list)
-    print(block_mapping)
-    
     block_mapping = torch.tensor(block_mapping, dtype=torch.int, device=device)
     block_mapping = torch.nn.functional.one_hot(block_mapping, num_classes=num_seqs).to(dtype)
+
+    block_indices = torch.tensor(block_indices, dtype=torch.int, device=device)
+    block_offsets = torch.tensor(block_offsets, dtype=torch.int, device=device)
 
     # Create the KV cache.
     key_caches, value_caches = create_kv_caches_with_random(NUM_BLOCKS,
@@ -155,12 +189,12 @@ def main(
                                                         device=device)
 
     key_cache, value_cache = key_caches[0], value_caches[0]
-    print(key_cache.shape)
-    print(value_cache.shape)
 
+    vllm_key_cache = VLLMKVCache()
+    vllm_value_cache = VLLMKVCache()
 
-    key_cache = VLLMKVCache(key, key_cache, block_indices, block_offsets)
-    value_cache = VLLMKVCache(value, value_cache, block_indices, block_offsets)
+    key_cache = vllm_key_cache(key, key_cache, block_indices, block_offsets)
+    value_cache = vllm_value_cache(value, value_cache, block_indices, block_offsets)
 
     # Prepare for the paged attention kernel.
     output = torch.empty_like(query)
@@ -181,9 +215,13 @@ def main(
     # Using default kv_scale
     kv_scale = 1.0
 
-    mask = torch.arange(0, block_size, device=device, dtype=torch.int32).unsqueeze(0)
-    block_bias = (torch.zeros_like(mask, dtype=dtype)
-                        .masked_fill_(mask, -math.inf))
+    block_bias = torch.empty(max_num_blocks_per_seq,
+                        block_size,
+                        dtype=dtype,
+                        device=device)
+
+    block_bias.uniform_(-scale, scale)
+    print("attn bias shape: ", block_bias.shape)
 
     #prepare for HPU graph mode
     if not torch.cuda.is_available():
@@ -201,6 +239,7 @@ def main(
             qk_matmul,
             kv_matmul,
             keys_fetch_func,
+            values_fetch_func,
     ):
         inputs = [
             query,
@@ -213,6 +252,7 @@ def main(
             qk_matmul,
             kv_matmul,
             keys_fetch_func,
+            values_fetch_func,
         ]
 
         h = ht.hpu.graphs.input_hash(inputs)
@@ -234,6 +274,7 @@ def main(
                     qk_matmul_op=qk_matmul,
                     kv_matmul_op=kv_matmul,
                     keys_fetch_func=keys_fetch_func,
+                    values_fetch_func=values_fetch_func,
                 )
 
                 graph.capture_end()
@@ -288,7 +329,8 @@ def main(
                     kv_scale,
                     Matmul(),
                     Matmul(),
-                    keys_fetch_func,
+                    vllm_key_cache.fetch_from_cache,
+                    vllm_value_cache.fetch_from_cache,
                 )
             else:
                 raise ValueError(f"Invalid version: {version}")
@@ -362,6 +404,7 @@ if __name__ == '__main__':
         seq_len=args.seq_len,
         num_query_heads=args.num_query_heads,
         num_kv_heads=args.num_kv_heads,
+        hidden_size=4096,
         head_size=args.head_size,
         block_size=args.block_size,
         use_alibi=args.use_alibi,

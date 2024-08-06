@@ -215,7 +215,7 @@ def main(
     # Using default kv_scale
     kv_scale = 1.0
 
-    block_bias = torch.empty(max_num_blocks_per_seq,
+    block_bias = torch.empty(block_list.numel(),
                         block_size,
                         dtype=dtype,
                         device=device)

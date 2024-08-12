@@ -124,11 +124,6 @@ def main(
 
     value.uniform_(-scale, scale)
 
-
-    print("query shape: ", query.shape)
-    print("query shape: ", key.shape)
-    print("query shape: ", value.shape)
-
     assert num_query_heads % num_kv_heads == 0
     alibi_slopes = None
     if use_alibi:
@@ -137,7 +132,6 @@ def main(
                                    device=device)
 
     seq_lens = [seq_len for _ in range(num_seqs)]
-    print(seq_lens)
 
     max_seq_len = max(seq_lens)
     seq_lens = torch.tensor(seq_lens, dtype=torch.int, device=device)
@@ -159,10 +153,6 @@ def main(
         block_offset = position % block_size
         block_indices.append(block_indice)
         block_offsets.append(block_offset)
-
-    #block_tables = torch.tensor(block_tables_lst,
-    #                            dtype=torch.int,
-    #                            device=device)
 
     blocks_used = [len(bt) for bt in block_tables_lst]
     block_list = list(itertools.chain(*block_tables_lst))
@@ -221,7 +211,14 @@ def main(
                         device=device)
 
     block_bias.uniform_(-scale, scale)
-    print("attn bias shape: ", block_bias.shape)
+
+    print("query :", query.shape)
+    print("key_cache :", key_cache.shape)
+    print("value_cache :", value_cache.shape)
+    print("block_list :", block_list.shape)
+    print("block_mapping :", block_mapping.shape)
+    print("block_attn :", block_bias.shape)
+
 
     #prepare for HPU graph mode
     if not torch.cuda.is_available():

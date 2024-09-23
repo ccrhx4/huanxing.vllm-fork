@@ -56,6 +56,7 @@ def main(args: argparse.Namespace):
         use_beam_search=args.use_beam_search,
         ignore_eos=True,
         max_tokens=args.output_len,
+        repetition_penalty=args.repetition_penalty,
     )
     print(sampling_params)
     dummy_prompt_token_ids = np.random.randint(10000,
@@ -88,8 +89,8 @@ def main(args: argparse.Namespace):
             return latency
 
     print("Warming up...")
-    for _ in tqdm(range(args.num_iters_warmup), desc="Warmup iterations"):
-        run_to_completion(profile_dir=None)
+    #for _ in tqdm(range(args.num_iters_warmup), desc="Warmup iterations"):
+    #    run_to_completion(profile_dir=None)
 
     if args.profile:
         profile_dir = args.profile_result_dir
@@ -148,6 +149,7 @@ if __name__ == '__main__':
                         default=1,
                         help='Number of generated sequences per prompt.')
     parser.add_argument('--use-beam-search', action='store_true')
+    parser.add_argument('--repetition-penalty', type=float, default=1.0)
     parser.add_argument('--num-iters-warmup',
                         type=int,
                         default=10,
@@ -168,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dtype',
         type=str,
-        default='auto',
+        default='bfloat16',
         choices=['auto', 'half', 'float16', 'bfloat16', 'float', 'float32'],
         help='data type for model weights and activations. '
         'The "auto" option will use FP16 precision '
@@ -208,13 +210,13 @@ if __name__ == '__main__':
     parser.add_argument(
         "--device",
         type=str,
-        default="auto",
+        default="hpu",
         choices=["auto", "cuda", "cpu", "hpu", "openvino", "tpu", "xpu"],
         help='device type for vLLM execution, supporting CUDA, HPU, '
         'OpenVINO and CPU.')
     parser.add_argument('--block-size',
                         type=int,
-                        default=16,
+                        default=128,
                         help='block size of key/value cache')
     parser.add_argument(
         '--enable-chunked-prefill',

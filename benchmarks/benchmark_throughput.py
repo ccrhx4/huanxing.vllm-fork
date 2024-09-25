@@ -70,6 +70,7 @@ def run_vllm(
     seed: int,
     n: int,
     use_beam_search: bool,
+    repetition_penalt: float,
     trust_remote_code: bool,
     dtype: str,
     max_model_len: Optional[int],
@@ -118,6 +119,7 @@ def run_vllm(
                 n=n,
                 temperature=0.0 if use_beam_search else 1.0,
                 top_p=1.0,
+                repetition_penalty=repetition_penalty,
                 use_beam_search=use_beam_search,
                 ignore_eos=True,
                 max_tokens=output_len,
@@ -227,7 +229,7 @@ def main(args: argparse.Namespace):
         elapsed_time = run_vllm(
             requests, args.model, args.tokenizer, args.quantization,
             args.tensor_parallel_size, args.seed, args.n, args.use_beam_search,
-            args.trust_remote_code, args.dtype, args.max_model_len,
+            args.repetition_penalty, args.trust_remote_code, args.dtype, args.max_model_len,
             args.enforce_eager, args.kv_cache_dtype,
             args.quantization_param_path, args.device,
             args.enable_prefix_caching, args.enable_chunked_prefill,
@@ -294,9 +296,10 @@ if __name__ == "__main__":
     parser.add_argument("--use-beam-search", action="store_true")
     parser.add_argument("--num-prompts",
                         type=int,
-                        default=1000,
+                        default=16,
                         help="Number of prompts to process.")
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--repetition_penalty", type=float, default=1.0)
+    parser.add_argument("--seed", type=int, default=1105)
     parser.add_argument("--hf-max-batch-size",
                         type=int,
                         default=None,
@@ -349,7 +352,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device",
         type=str,
-        default="auto",
+        default="hpu",
         choices=["auto", "cuda", "cpu", "hpu", "openvino", "tpu", "xpu"],
         help='device type for vLLM execution, supporting CUDA, HPU, '
         'OpenVINO and CPU.')

@@ -20,6 +20,8 @@ from vllm.sequence import (CompletionSequenceGroupOutput, Logprob,
                            PromptLogprobs, SampleLogprobs, SamplerOutput,
                            SequenceOutput)
 
+import habana_frameworks.torch.core as htcore
+
 # (num_token_ids, num_parent_ids) per sequence group.
 SampleResultType = List[Tuple[List[int], List[int]]]
 
@@ -206,7 +208,10 @@ def _get_bin_counts_and_mask(
     bin_counts = torch.zeros((num_seqs, vocab_size + 1),
                              dtype=torch.long,
                              device=tokens.device)
+    htcore.mark_step()
     bin_counts.scatter_add_(1, tokens, torch.ones_like(tokens))
+    htcore.mark_step()
+
     bin_counts = bin_counts[:, :vocab_size]
     mask = bin_counts > 0
 
@@ -362,10 +367,13 @@ def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
         output_tokens_tensor, vocab_size, num_seqs)
 
     repetition_penalties = repetition_penalties[:, None].repeat(1, vocab_size)
+    
+    htcore.mark_step()
     repetition_penalties[~(prompt_mask | output_mask)] = 1.0
     logits = torch.where(logits > 0, logits / repetition_penalties,
                          logits * repetition_penalties)
-
+    htcore.mark_step()
+    
     # We follow the definition in OpenAI API.
     # Refer to https://platform.openai.com/docs/api-reference/parameter-details
     logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts

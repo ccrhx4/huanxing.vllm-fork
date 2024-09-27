@@ -89,8 +89,8 @@ def main(args: argparse.Namespace):
             return latency
 
     print("Warming up...")
-    #for _ in tqdm(range(args.num_iters_warmup), desc="Warmup iterations"):
-    #    run_to_completion(profile_dir=None)
+    for _ in tqdm(range(args.num_iters_warmup), desc="Warmup iterations"):
+        run_to_completion(profile_dir=None)
 
     if args.profile:
         profile_dir = args.profile_result_dir

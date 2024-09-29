@@ -70,7 +70,7 @@ def run_vllm(
     seed: int,
     n: int,
     use_beam_search: bool,
-    repetition_penalt: float,
+    repetition_penalty: float,
     trust_remote_code: bool,
     dtype: str,
     max_model_len: Optional[int],
@@ -107,6 +107,7 @@ def run_vllm(
         max_num_batched_tokens=max_num_batched_tokens,
         distributed_executor_backend=distributed_executor_backend,
         load_format=load_format,
+        enable_delayed_sampling=False,
     )
 
     # Add the requests to the engine.
@@ -126,8 +127,9 @@ def run_vllm(
             ))
 
     start = time.perf_counter()
-    llm.generate(prompts, sampling_params, use_tqdm=True)
+    outputs = llm.generate(prompts, sampling_params, use_tqdm=True)
     end = time.perf_counter()
+    
     return end - start
 
 
@@ -245,6 +247,10 @@ def main(args: argparse.Namespace):
                                args.output_len)
     else:
         raise ValueError(f"Unknown backend: {args.backend}")
+
+    for _, prompt_len, output_len in requests:
+        print(prompt_len, output_len)
+
     total_num_tokens = sum(prompt_len + output_len
                            for _, prompt_len, output_len in requests)
     print(f"Throughput: {len(requests) / elapsed_time:.2f} requests/s, "
@@ -298,7 +304,7 @@ if __name__ == "__main__":
                         type=int,
                         default=16,
                         help="Number of prompts to process.")
-    parser.add_argument("--repetition_penalty", type=float, default=1.0)
+    parser.add_argument("--repetition-penalty", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=1105)
     parser.add_argument("--hf-max-batch-size",
                         type=int,

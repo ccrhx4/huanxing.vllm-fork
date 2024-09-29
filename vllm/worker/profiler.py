@@ -37,7 +37,7 @@ class FileWriter(threading.Thread):
 
     def run(self):
         # don't check the queue too often
-        while not self.timer_event.wait(1):
+        while not self.timer_event.wait(0.01):
             # Block and wait for the next item in the queue
             content = self.event_queue.get()
             # Collect any other items in the queue
@@ -110,7 +110,7 @@ class Profiler:
                 logger.warning(
                     'Profiler: end() call does not have matching start() call. '
                     'Disabling profiler.')
-                self.enabled = False
+                # self.enabled = False
                 return
             event = self.event_cache.pop()
             event['dur'] = ts - event['ts']

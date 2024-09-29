@@ -1111,8 +1111,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
         self.event_start = self.profiler.get_timestamp_us()
         is_prompt = seq_group_metadata_list[0].is_prompt
-        base_event_name = 'prompt' if is_prompt else 'decode'
-        self.profiler.start('internal', base_event_name)
 
         real_batch_size = len(seq_group_metadata_list)
         bucket_cfg = self.prompt_bs_bucket_cfg if is_prompt else \
@@ -1246,7 +1244,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
         attn_metadata = prefill_attn_metadata if \
             prefill_attn_metadata is not None else decode_attn_metadata
-
+        
         return self._model_input_cls(input_tokens=input_tokens,
                                      seq_lens=seq_lens,
                                      query_lens=query_lens,
@@ -1420,6 +1418,9 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
         if habana_profiler:
             habana_profiler.stop()
+
+        self.profiler.end()
+
         gc.collect()
 
     def remove_all_loras(self):
@@ -1833,7 +1834,7 @@ class HabanaModelRunner(
                 seq_group_metadata_list)
             assert model_input.attn_metadata is not None
             is_prompt = model_input.attn_metadata.is_prompt
-
+        
         return dataclasses.replace(model_input,
                                    sampling_metadata=sampling_metadata,
                                    is_prompt=is_prompt,
@@ -1902,6 +1903,8 @@ class HabanaModelRunner(
             execute_model_kwargs.update({"bypass_hpu_graphs": not use_graphs})
 
         htorch.core.mark_step()
+
+        self.profiler.start('internal', "execute_model")
 
         output = None
         input_ids = None
@@ -1975,6 +1978,7 @@ class HabanaModelRunner(
                                 f"graphs{'T' if use_graphs else 'F'}")
         else:
             model_event_name = 'model_executable'
+
         with self.profiler.record_event('internal', model_event_name):
             #print("libin debug shape ",execute_model_kwargs["input_ids"].shape )
             hidden_states = self.model.forward(
@@ -2056,6 +2060,9 @@ class HabanaModelRunner(
                     seq_data.prev_logits = logits
                     seq_data.prev_logits_idx = idx
         htorch.core.mark_step()
+        
+        if not self.is_driver_worker and warmup_mode:
+            self.profiler.end()
 
         # Only perform sampling in the driver worker.
         if not self.is_driver_worker:

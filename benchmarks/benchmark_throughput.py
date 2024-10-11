@@ -38,6 +38,7 @@ def sample_requests(
 
     # Filter out sequences that are too long or too short
     filtered_dataset: List[Tuple[str, int, int]] = []
+
     for i in range(len(dataset)):
         if len(filtered_dataset) == num_requests:
             break
@@ -85,6 +86,8 @@ def run_vllm(
     gpu_memory_utilization: float = 0.9,
     download_dir: Optional[str] = None,
     load_format: str = EngineArgs.load_format,
+    profile: bool = False,
+    profile_dir: str = None,
 ) -> float:
     from vllm import LLM, SamplingParams
     llm = LLM(
@@ -124,14 +127,41 @@ def run_vllm(
                 use_beam_search=use_beam_search,
                 ignore_eos=True,
                 max_tokens=output_len,
-            ))
-
-    start = time.perf_counter()
-    outputs = llm.generate(prompts, sampling_params, use_tqdm=True)
-    end = time.perf_counter()
+        ))
     
-    return end - start
+    def run_to_completion(prompts: List[str], sampling_params: List[SamplingParams], n_iter = int):
+        for i in range(0, n_iter):
+            start = time.perf_counter()
+            outputs = llm.generate(prompts, sampling_params, use_tqdm=False)
+            end = time.perf_counter()
+            elapsed_time = end - start
+            
+            total_num_tokens = sum(prompt_len + output_len
+                               for _, prompt_len, output_len in requests)
 
+            gen_num_tokens = sum(output_len
+                               for _, _, output_len in requests)
+            print("prompt_len: ", [prompt_len for _, prompt_len, output_len in requests])
+            print("output_len: ", [output_len for _, prompt_len, output_len in requests])
+            print(f"Throughput: {len(requests) / elapsed_time:.2f} requests/s \n"
+                  f"TPS(w/ prompts, {total_num_tokens}): {total_num_tokens / elapsed_time:.2f} tokens/s \n" 
+                  f"TPS(w/o prompts, {gen_num_tokens}): {gen_num_tokens / elapsed_time:.2f} tokens/s")
+    
+        return end - start
+
+    if profile:
+        with torch.profiler.profile(
+                        activities=[
+                            torch.profiler.ProfilerActivity.CPU,
+                            torch.profiler.ProfilerActivity.HPU,
+                        ],
+                        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                                str(profile_dir))) as p:
+            elapsed_time = run_to_completion(prompts, sampling_params, 5)
+    else:
+        elapsed_time = run_to_completion(prompts, sampling_params, 5)
+
+    return elapsed_time
 
 def run_hf(
     requests: List[Tuple[str, int, int]],
@@ -236,7 +266,8 @@ def main(args: argparse.Namespace):
             args.quantization_param_path, args.device,
             args.enable_prefix_caching, args.enable_chunked_prefill,
             args.max_num_batched_tokens, args.distributed_executor_backend,
-            args.gpu_memory_utilization, args.download_dir, args.load_format)
+            args.gpu_memory_utilization, args.download_dir, args.load_format,
+            args.profile, args.profile_dir)
     elif args.backend == "hf":
         assert args.tensor_parallel_size == 1
         elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
@@ -414,6 +445,17 @@ if __name__ == "__main__":
         'section for more information.\n'
         '* "bitsandbytes" will load the weights using bitsandbytes '
         'quantization.\n')
+    parser.add_argument(
+        '--profile',
+        action='store_true',
+        help='profile the generation process of a single batch')
+    parser.add_argument(
+        '--profile-dir',
+        type=str,
+        default=None,
+        help=('path to save the pytorch profiler output. Can be visualized '
+              'with ui.perfetto.dev or Tensorboard.'))
+
     args = parser.parse_args()
     if args.tokenizer is None:
         args.tokenizer = args.model

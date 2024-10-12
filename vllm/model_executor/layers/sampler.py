@@ -20,6 +20,7 @@ from vllm.sequence import (CompletionSequenceGroupOutput, Logprob,
                            PromptLogprobs, SampleLogprobs, SamplerOutput,
                            SequenceOutput)
 
+import habana_frameworks.torch as ht
 import habana_frameworks.torch.core as htcore
 
 # (num_token_ids, num_parent_ids) per sequence group.
@@ -55,6 +56,7 @@ class Sampler(nn.Module):
         # speculative decoding.
         self.include_gpu_probs_tensor = False
         self.sample_token_positions_only = False
+        self.penalty_graph_cache = {}
 
     def _init_sampling_tensors(
         self,
@@ -122,7 +124,7 @@ class Sampler(nn.Module):
 
         # Apply presence and frequency penalties.
         if do_penalties:
-            logits = _apply_penalties(logits, sampling_tensors.prompt_tokens,
+            logits = _apply_penalties(self, logits, sampling_tensors.prompt_tokens,
                                       sampling_tensors.output_tokens,
                                       sampling_tensors.presence_penalties,
                                       sampling_tensors.frequency_penalties,
@@ -208,9 +210,7 @@ def _get_bin_counts_and_mask(
     bin_counts = torch.zeros((num_seqs, vocab_size + 1),
                              dtype=torch.long,
                              device=tokens.device)
-    htcore.mark_step()
     bin_counts.scatter_add_(1, tokens, torch.ones_like(tokens))
-    htcore.mark_step()
 
     bin_counts = bin_counts[:, :vocab_size]
     mask = bin_counts > 0
@@ -355,31 +355,54 @@ def _apply_min_tokens_penalty(
     return logits
 
 
-def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
+def _apply_penalties(self, logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
                      output_tokens_tensor: torch.Tensor,
                      presence_penalties: torch.Tensor,
                      frequency_penalties: torch.Tensor,
                      repetition_penalties: torch.Tensor) -> torch.Tensor:
-    num_seqs, vocab_size = logits.shape
-    _, prompt_mask = _get_bin_counts_and_mask(prompt_tokens_tensor, vocab_size,
+    inputs = [
+            logits,
+            prompt_tokens_tensor,
+            output_tokens_tensor,
+            presence_penalties,
+            frequency_penalties,
+            repetition_penalties,
+        ]
+    h = ht.hpu.graphs.input_hash(inputs)
+    cached = self.penalty_graph_cache.get(h)
+
+    if cached is None:
+        # Capture the graph and cache it
+        with ht.hpu.stream(ht.hpu.Stream()):
+            graph = ht.hpu.HPUGraph()
+            graph.capture_begin()
+            num_seqs, vocab_size = logits.shape
+            _, prompt_mask = _get_bin_counts_and_mask(prompt_tokens_tensor, vocab_size,
                                               num_seqs)
-    output_bin_counts, output_mask = _get_bin_counts_and_mask(
-        output_tokens_tensor, vocab_size, num_seqs)
+            output_bin_counts, output_mask = _get_bin_counts_and_mask(
+                output_tokens_tensor, vocab_size, num_seqs)
 
-    repetition_penalties = repetition_penalties[:, None].repeat(1, vocab_size)
+            repetition_penalties = repetition_penalties[:, None].repeat(1, vocab_size)
     
-    htcore.mark_step()
-    repetition_penalties[~(prompt_mask | output_mask)] = 1.0
-    logits = torch.where(logits > 0, logits / repetition_penalties,
-                         logits * repetition_penalties)
-    htcore.mark_step()
+            repetition_penalties[~(prompt_mask | output_mask)] = 1.0
     
-    # We follow the definition in OpenAI API.
-    # Refer to https://platform.openai.com/docs/api-reference/parameter-details
-    logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
-    logits -= presence_penalties.unsqueeze_(dim=1) * output_mask
-    return logits
+            logits = torch.where(logits > 0, logits / repetition_penalties,
+                             logits * repetition_penalties)
+            # We follow the definition in OpenAI API.
+            # Refer to https://platform.openai.com/docs/api-reference/parameter-details
+            # logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
+            # logits -= presence_penalties.unsqueeze_(dim=1) * output_mask
+            graph.capture_end()
+            graph_inputs = inputs
+            graph_outputs = logits
+            self.penalty_graph_cache[h] = ht.hpu.graphs.CachedParams(graph_inputs, graph_outputs, graph)
+        return logits
+    
+    ht.hpu.graphs.copy_to(cached.graph_inputs, inputs)
+    cached.graph.replay()
+    ht.core.hpu.default_stream().synchronize()
 
+    return cached.graph_outputs
 
 def _apply_top_k_top_p(
     logits: torch.Tensor,

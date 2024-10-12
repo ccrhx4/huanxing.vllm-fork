@@ -468,12 +468,15 @@ class SamplingTensors:
         do_penalties = prompt_tokens or output_tokens
 
         if do_penalties:
+            prompt_max_len = 1024
+            output_max_len = 1024
             prompt_t = make_tensor_with_pad(
                 prompt_tokens,
                 vocab_size,
                 device="cpu",
                 dtype=torch.int64,
                 pin_memory=pin_memory,
+                max_len=prompt_max_len,
             )
             output_t = make_tensor_with_pad(
                 output_tokens,
@@ -481,6 +484,7 @@ class SamplingTensors:
                 device="cpu",
                 dtype=torch.int64,
                 pin_memory=pin_memory,
+                max_len=output_max_len,
             )
         else:
             empty_tensor = torch.empty(0, device=device, dtype=torch.long)

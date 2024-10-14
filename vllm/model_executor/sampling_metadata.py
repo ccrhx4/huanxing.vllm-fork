@@ -468,6 +468,7 @@ class SamplingTensors:
         do_penalties = prompt_tokens or output_tokens
 
         if do_penalties:
+            # TODO: remove hardcode value
             prompt_max_len = 1024
             output_max_len = 1024
             prompt_t = make_tensor_with_pad(
@@ -495,43 +496,38 @@ class SamplingTensors:
             temperatures,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
+
         top_ps_t = torch.tensor(
             top_ps,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
+
         min_ps_t = torch.tensor(
             min_ps,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
         presence_penalties_t = torch.tensor(
             presence_penalties,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
         frequency_penalties_t = torch.tensor(
             frequency_penalties,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
         repetition_penalties_t = torch.tensor(
             repetition_penalties,
             device="cpu",
             dtype=dtype,
-            pin_memory=pin_memory,
         )
         top_ks_t = torch.tensor(
             top_ks,
             device="cpu",
             dtype=torch.int,
-            pin_memory=pin_memory,
         )
         idx_dtype = torch.long if not is_hpu(
         ) else torch.int  # Gaudi doesn't have full native int64 support
@@ -539,7 +535,6 @@ class SamplingTensors:
             sample_indices,
             device="cpu",
             dtype=idx_dtype,
-            pin_memory=pin_memory,
         )
         # need to transpose and make contiguous to
         # copy the tensor correctly.
@@ -548,8 +543,19 @@ class SamplingTensors:
             sampling_seeds,
             device="cpu",
             dtype=idx_dtype,
-            pin_memory=pin_memory,
         ).T.contiguous()
+
+        if pin_memory:
+            temperatures_t.pin_memory(device="hpu")
+            top_ps_t.pin_memory(device="hpu")
+            min_ps_t.pin_memory(device="hpu")
+            frequency_penalties_t.pin_memory(device="hpu")
+            presence_penalties_t.pin_memory(device="hpu")
+            repetition_penalties_t.pin_memory(device="hpu")
+            top_ks_t.pin_memory(device="hpu")
+            sample_indices_t.pin_memory(device="hpu")
+            sampling_seeds_t.pin_memory(device="hpu")
+
 
         # Because the memory is pinned, we can do non-blocking
         # transfer to device.

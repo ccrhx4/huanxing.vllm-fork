@@ -583,7 +583,7 @@ def is_pin_memory_available() -> bool:
         return False
     elif is_hpu():
         print_warning_once("Pin memory is not supported on HPU.")
-        return False
+        return True
     elif is_cpu() or is_openvino():
         return False
     return True
@@ -761,7 +761,7 @@ def make_tensor_with_pad(
 
     tensor = torch.from_numpy(padded_x).to(device)
     if pin_memory:
-        tensor = tensor.pin_memory()
+        tensor = tensor.pin_memory(device="hpu")
 
     return tensor
 
@@ -773,7 +773,10 @@ def async_tensor_h2d(
     pin_memory: bool,
 ) -> torch.Tensor:
     """Asynchronously create a tensor and copy it from host to device."""
-    t = torch.tensor(data, dtype=dtype, pin_memory=pin_memory, device="cpu")
+    t = torch.tensor(data, dtype=dtype, device="cpu")
+    if pin_memory:
+        t.pin_memory(device="hpu")
+
     return t.to(device=target_device, non_blocking=True)
 
 

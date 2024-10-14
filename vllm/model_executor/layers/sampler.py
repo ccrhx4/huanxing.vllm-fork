@@ -354,7 +354,6 @@ def _apply_min_tokens_penalty(
     assert logits_applied == logits.shape[0]
     return logits
 
-
 def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
                      output_tokens_tensor: torch.Tensor,
                      presence_penalties: torch.Tensor,
@@ -367,7 +366,9 @@ def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
         output_tokens_tensor, vocab_size, num_seqs)
 
     repetition_penalties = repetition_penalties[:, None].repeat(1, vocab_size)
-    repetition_penalties[~(prompt_mask | output_mask)] = 1.0
+    # change boolean index to masked_fill for better performance
+    repetition_penalties.masked_fill_(~(prompt_mask | output_mask), 1.0)
+
     logits = torch.where(logits > 0, logits / repetition_penalties,
                          logits * repetition_penalties)
 
@@ -376,7 +377,6 @@ def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
     logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
     logits -= presence_penalties.unsqueeze_(dim=1) * output_mask
     return logits
-
 
 def _apply_top_k_top_p(
     logits: torch.Tensor,

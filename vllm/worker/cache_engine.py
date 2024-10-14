@@ -93,10 +93,15 @@ class CacheEngine:
                 # We zero-out everything for simplicity.
                 dtype = torch.uint8 if self.dtype == torch.float8_e4m3fn else \
                         self.dtype
-                kv_cache.append(
-                    torch.zeros(kv_cache_shape,
+                if pin_memory:
+                    kv_cache.append(
+                        torch.zeros(kv_cache_shape,
                                 dtype=dtype,
-                                pin_memory=pin_memory,
+                                device=device).pin_memory(device="hpu"))
+                else:
+                    kv_cache.append(
+                        torch.zeros(kv_cache_shape,
+                                dtype=dtype,
                                 device=device))
         return kv_cache
 

@@ -208,9 +208,7 @@ def _get_bin_counts_and_mask(
     bin_counts = torch.zeros((num_seqs, vocab_size + 1),
                              dtype=torch.long,
                              device=tokens.device)
-    htcore.mark_step()
     bin_counts.scatter_add_(1, tokens, torch.ones_like(tokens))
-    htcore.mark_step()
 
     bin_counts = bin_counts[:, :vocab_size]
     mask = bin_counts > 0
@@ -367,7 +365,7 @@ def _apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
 
     repetition_penalties = repetition_penalties[:, None].repeat(1, vocab_size)
     # change boolean index to masked_fill for better performance
-    repetition_penalties.masked_fill(~(prompt_mask | output_mask), 1.0)
+    repetition_penalties.masked_fill_(~(prompt_mask | output_mask), 1.0)
 
     logits = torch.where(logits > 0, logits / repetition_penalties,
                          logits * repetition_penalties)

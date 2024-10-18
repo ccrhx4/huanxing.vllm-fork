@@ -137,11 +137,14 @@ def generate_prompt_buckets(bs_bucket_config,
 
     filtered_buckets = buckets
     if max_num_batched_tokens is not None:
-        # Remove buckets exceeding batch token budget
-        filtered_buckets = list(
-            filter(
-                lambda bucket: bucket[0] * bucket[1] <= max_num_batched_tokens,
-                buckets))
+        disable_filter = os.environ.get('VLLM_NOT_FILTER_PROFILL_GRAPH', '1')
+        
+        if disable_filter == 0:
+            # Remove buckets exceeding batch token budget
+            filtered_buckets = list(
+                filter(
+                    lambda bucket: bucket[0] * bucket[1] <= max_num_batched_tokens,
+                    buckets))
 
         if len(filtered_buckets) == 0:
             # we can handle this if we ignore max_num_batched_tokens

@@ -8,6 +8,7 @@ from vllm.config import CacheConfig, DeviceConfig, ModelConfig, ParallelConfig
 from vllm.logger import init_logger
 from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, get_dtype_size,
                         is_pin_memory_available)
+from vllm.platforms import current_platform
 
 logger = init_logger(__name__)
 
@@ -77,11 +78,18 @@ class CacheEngine:
             # null block in CpuGpuBlockAllocator requires at least that
             # block to be zeroed-out.
             # We zero-out everything for simplicity.
-            kv_cache.append(
-                torch.zeros(kv_cache_shape,
-                            dtype=self.dtype,
-                            pin_memory=pin_memory,
-                            device=device))
+            if pin_memory:
+                if current_platform.is_hpu():
+                    kv_cache.append(
+                        torch.zeros(kv_cache_shape,
+                                dtype=self.dtype,
+                                pin_memory=pin_memory,
+                                device=device))
+                else:
+                    kv_cache.append(
+                        torch.zeros(kv_cache_shape,
+                                dtype=dtype,
+                                device=device).pin_memory(device="hpu"))
         return kv_cache
 
     def swap_in(self, src_to_dst: torch.Tensor) -> None:

@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from vllm import LLM, SamplingParams
 from vllm.engine.arg_utils import EngineArgs
-from vllm.inputs import PromptInputs
+from vllm.inputs import PromptType
 from vllm.model_executor.layers.quantization import QUANTIZATION_METHODS
 from vllm.utils import FlexibleArgumentParser
 
@@ -53,7 +53,6 @@ def main(args: argparse.Namespace):
         n=args.n,
         temperature=0.0 if args.use_beam_search else 1.0,
         top_p=1.0,
-        use_beam_search=args.use_beam_search,
         ignore_eos=True,
         max_tokens=args.output_len,
         repetition_penalty=args.repetition_penalty,

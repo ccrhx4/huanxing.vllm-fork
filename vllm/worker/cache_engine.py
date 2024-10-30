@@ -78,18 +78,11 @@ class CacheEngine:
             # null block in CpuGpuBlockAllocator requires at least that
             # block to be zeroed-out.
             # We zero-out everything for simplicity.
-            if pin_memory:
-                if current_platform.is_hpu():
-                    kv_cache.append(
-                        torch.zeros(kv_cache_shape,
-                                dtype=self.dtype,
-                                pin_memory=pin_memory,
-                                device=device))
-                else:
-                    kv_cache.append(
-                        torch.zeros(kv_cache_shape,
-                                dtype=dtype,
-                                device=device).pin_memory(device="hpu"))
+            kv_cache.append(
+                torch.zeros(kv_cache_shape,
+                            dtype=self.dtype,
+                            pin_memory=pin_memory,
+                            device=device))
         return kv_cache
 
     def swap_in(self, src_to_dst: torch.Tensor) -> None:

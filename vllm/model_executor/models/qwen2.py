@@ -166,7 +166,14 @@ class Qwen2Attention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+        
+        # cast q, k to fp32 for rusedrope
+        q = q.to(torch.float)
+        k = k.to(torch.float)
         q, k = self.rotary_emb(positions, q, k)
+        q = q.to(torch.bfloat16)
+        k = k.to(torch.bfloat16)
+
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
         output, _ = self.o_proj(attn_output)
         return output
@@ -219,11 +226,19 @@ class Qwen2DecoderLayer(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Self Attention
         if residual is None:
-            residual = hidden_states
+            hidden_states = hidden_states.to(torch.float)
+            residual = hidden_states.to(torch.float)
             hidden_states = self.input_layernorm(hidden_states)
+            residual = residual.to(torch.bfloat16)
+            hidden_states = hidden_states.to(torch.bfloat16)
         else:
+            hidden_states = hidden_states.to(torch.float)
+            residual = residual.to(torch.float)
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
+            hidden_states = hidden_states.to(torch.bfloat16)
+            residual = residual.to(torch.bfloat16)
+
         hidden_states = self.self_attn(
             positions=positions,
             hidden_states=hidden_states,
@@ -232,8 +247,14 @@ class Qwen2DecoderLayer(nn.Module):
         )
 
         # Fully Connected
+        hidden_states = hidden_states.to(torch.float)
+        residual = residual.to(torch.float)
+    
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states, residual)
+        
+        hidden_states = hidden_states.to(torch.bfloat16)
+        residual = residual.to(torch.bfloat16)
         hidden_states = self.mlp(hidden_states)
         return hidden_states, residual
 

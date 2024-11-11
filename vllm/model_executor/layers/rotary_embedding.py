@@ -118,7 +118,7 @@ class RotaryEmbedding(CustomOp):
         cache = torch.cat((cos, sin), dim=-1)
         return cache
 
-    def forward_native(
+    def forward_hpu(
         self,
         positions: torch.Tensor,
         query: torch.Tensor,
@@ -194,7 +194,7 @@ class RotaryEmbedding(CustomOp):
                                  self.cos_sin_cache, self.is_neox_style)
         return query, key
 
-    def forward_hpu(
+    def forward_native(
         self,
         positions: torch.Tensor,
         query: torch.Tensor,

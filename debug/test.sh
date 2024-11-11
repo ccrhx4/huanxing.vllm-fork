@@ -1,0 +1,1 @@
+PT_HPU_LAZY_MODE=0 VLLM_PROMPT_USE_FUSEDSDPA=1 VLLM_PA_SOFTMAX_IMPL=scatter_reduce VLLM_SKIP_WARMUP=true python offline_inference.py

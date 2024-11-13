@@ -877,7 +877,8 @@ def make_tensor_with_pad_align(
     `max_len`.
     """
     np_dtype = TORCH_DTYPE_TO_NUMPY_DTYPE[dtype]
-    padded_x = make_ndarray_with_pad_align(x, pad, np_dtype, max_len_align=max_len_align)
+    padded_x = make_ndarray_with_pad_align(x, pad, np_dtype, 
+                max_len_align=max_len_align)
 
     tensor = torch.from_numpy(padded_x).to(device)
     if pin_memory:

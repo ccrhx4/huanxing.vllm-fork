@@ -882,10 +882,7 @@ def make_tensor_with_pad_align(
 
     tensor = torch.from_numpy(padded_x).to(device)
     if pin_memory:
-        if not current_platform.is_hpu():
-            tensor = tensor.pin_memory()
-        else:
-            tensor = tensor.pin_memory("hpu")
+        tensor = tensor.pin_memory("hpu")
 
     return tensor
 

@@ -1,0 +1,4 @@
+cuda:
+The reaction between phosphoric acid (H3PO4) and potassium hydroxide (KOH) is as follows: H3PO4 + 3KOH -> K3PO4 + 3H2O. This is a 1:3 molar ratio. We can calculate the moles of H3PO4: 0.150 M * 0.050 L = 0.0075 moles. To neutralize this, we need 3 times this amount of KOH, or 0.0225 moles. The volume of KOH needed is 0.0225 moles / 0.250 M = 0.090 L or 90 mL. The answer is (B).
+
+

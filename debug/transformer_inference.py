@@ -14,10 +14,17 @@ tokens.append(input_tokens)
 
 from transformers import AutoModelForCausalLM
 
-model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype='auto').to(device)
+model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation="eager", torch_dtype='auto').to(device)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 seq = torch.LongTensor(tokens).to(device)
+
+if device == "hpu":
+    ht.core.mark_step()
+
 generated_ids = model.generate(seq, max_length=2048, top_k=0, do_sample=False, repetition_penalty=1.0, top_p=1.0, temperature=1.0)
+
+if device == "hpu":
+    ht.core.mark_step()
 
 print(tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0])

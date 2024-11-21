@@ -815,7 +815,7 @@ def make_ndarray_with_pad_align(
     pad: T,
     dtype: npt.DTypeLike,
     *,
-    max_len_align: Optional[int] = None,
+    max_len_align: int = 1024,
 ) -> npt.NDArray:
     """
     Make a padded array from 2D inputs.
@@ -825,7 +825,7 @@ def make_ndarray_with_pad_align(
     """
     # Unlike for most functions, map is faster than a genexpr over `len`
     max_len = max(map(len, x), default=0)
-    max_len_aligned =  math.ceil(max_len / max_len_align) * max_len_align
+    max_len_aligned = math.ceil(max_len / max_len_align) * max_len_align
     padded_x = np.full((len(x), max_len_aligned), pad, dtype=dtype)
 
     for ind, blocktb in enumerate(x):
@@ -866,7 +866,7 @@ def make_tensor_with_pad_align(
     pad: T,
     dtype: torch.dtype,
     *,
-    max_len_align: Optional[int] = None,
+    max_len_align: int = 1024,
     device: Optional[Union[str, torch.device]] = None,
     pin_memory: bool = False,
 ) -> torch.Tensor:
@@ -874,11 +874,14 @@ def make_tensor_with_pad_align(
     Make a padded tensor from 2D inputs.
 
     The padding is applied to the end of each inner list until it reaches
-    `max_len`.
+    max_len_aligned, max_len_aligned is max_len rounding to the nearest 
+    `max_len_align`.
     """
     np_dtype = TORCH_DTYPE_TO_NUMPY_DTYPE[dtype]
-    padded_x = make_ndarray_with_pad_align(x, pad, np_dtype, 
-                max_len_align=max_len_align)
+    padded_x = make_ndarray_with_pad_align(x, 
+                                           pad,
+                                           np_dtype,
+                                           max_len_align=max_len_align)
 
     tensor = torch.from_numpy(padded_x).to(device)
     if pin_memory:

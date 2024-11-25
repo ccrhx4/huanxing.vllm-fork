@@ -755,6 +755,8 @@ def is_pin_memory_available() -> bool:
         return False
     elif current_platform.is_cpu() or current_platform.is_openvino():
         return False
+    elif is_fake_hpu():
+        return False
     return True
 
 
@@ -810,6 +812,7 @@ def make_ndarray_with_pad(
 
     return padded_x
 
+
 def make_ndarray_with_pad_align(
     x: List[List[T]],
     pad: T,
@@ -833,6 +836,7 @@ def make_ndarray_with_pad_align(
         padded_x[ind, :len(blocktb)] = blocktb
 
     return padded_x
+
 
 def make_tensor_with_pad(
     x: List[List[T]],
@@ -861,6 +865,7 @@ def make_tensor_with_pad(
 
     return tensor
 
+
 def make_tensor_with_pad_align(
     x: List[List[T]],
     pad: T,
@@ -878,7 +883,7 @@ def make_tensor_with_pad_align(
     `max_len_align`.
     """
     np_dtype = TORCH_DTYPE_TO_NUMPY_DTYPE[dtype]
-    padded_x = make_ndarray_with_pad_align(x, 
+    padded_x = make_ndarray_with_pad_align(x,
                                            pad,
                                            np_dtype,
                                            max_len_align=max_len_align)
@@ -888,6 +893,7 @@ def make_tensor_with_pad_align(
         tensor = tensor.pin_memory("hpu")
 
     return tensor
+
 
 def async_tensor_h2d(
     data: list,

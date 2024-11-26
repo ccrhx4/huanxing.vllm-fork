@@ -753,9 +753,8 @@ def is_pin_memory_available() -> bool:
     elif current_platform.is_neuron():
         print_warning_once("Pin memory is not supported on Neuron.")
         return False
-    elif current_platform.is_cpu() or current_platform.is_openvino():
-        return False
-    elif is_fake_hpu():
+    elif (current_platform.is_cpu() or current_platform.is_openvino()
+          or is_fake_hpu()):
         return False
     return True
 

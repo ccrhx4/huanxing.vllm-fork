@@ -2606,9 +2606,14 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                 sid: idx
                 for idx, sid in enumerate(cur_seq_ids) if sid >= 0
             }
+            print("cur seq ids: ", cur_seq_ids)
+            print("cur seq ids pos: ", cur_seq_id_pos)
             htorch.core.mark_step()
+            cached_sid_output_mapping = {}
             for i in range(num_cached):
                 prev_seq_ids = self._get_seq_ids(self.cached_step_inputs[i])
+                print("prev seq ids: ",prev_seq_ids)
+                print(model_input.sampling_metadata.seq_groups)
                 target_indices = [
                     cur_seq_id_pos.get(psi, -1) for psi in prev_seq_ids
                 ]
@@ -2621,8 +2626,18 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                     dtype=model_input.input_tokens.dtype)
                 model_input.input_tokens.index_copy_(
                     0, target_indices, self.cached_step_outputs[i])
-                htorch.core.mark_step()
+                
+                for idx, sid in enumerate(prev_seq_ids):
+                    cached_sid_output_mapping[sid] = self.cached_step_outputs[i][idx]
 
+                htorch.core.mark_step()
+            
+            # print("sid vs output: ", cached_sid_output_mapping)
+
+            for seq_group in model_input.sampling_metadata.seq_groups:
+                seq_ids = seq_group.seq_ids[0] #not support beam search, assume one seq per group
+                seq_data = seq_group.seq_data[seq_ids]
+                seq_data.output_token_ids_array[-1] = cached_sid_output_mapping[seq_ids]
         if not model_input.is_first_multi_step:
             if not model_input.is_last_step:
                 # not first or last multi-step

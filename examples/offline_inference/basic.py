@@ -2,12 +2,14 @@
 
 from vllm import LLM, SamplingParams
 from habana_frameworks.torch import hpu
+import torch
 
 hpu.enable_inference_mode()
-
+torch.set_printoptions(profile="full")
 # Sample prompts.
 prompts = [
     "Hello, my name is",
+    "Hello, my name is gaudi net",
 ]
 # Create a sampling params object.
 sampling_params = SamplingParams(temperature=1.0, repetition_penalty=0.9)

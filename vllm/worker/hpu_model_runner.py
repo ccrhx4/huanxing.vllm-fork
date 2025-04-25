@@ -84,6 +84,7 @@ VLLM_DELAYED_SAMPLING = os.environ.get('VLLM_DELAYED_SAMPLING',
                                        'false').lower() == 'true'
 DUMMY_TOKEN_ID = -1
 
+_SAMPLING_EPS = 1e-5
 
 class PhaseType(Enum):
     PREFILL = 'prefill'
@@ -2634,10 +2635,6 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
             
             # print("sid vs output: ", cached_sid_output_mapping)
 
-            for seq_group in model_input.sampling_metadata.seq_groups:
-                seq_ids = seq_group.seq_ids[0] #not support beam search, assume one seq per group
-                seq_data = seq_group.seq_data[seq_ids]
-                seq_data.output_token_ids_array[-1] = cached_sid_output_mapping[seq_ids]
         if not model_input.is_first_multi_step:
             if not model_input.is_last_step:
                 # not first or last multi-step
@@ -2840,7 +2837,23 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
 
                 if use_delayed_sampling:
                     fake_output = self._delayed_sampler_outputs(model_input)
+                    
+                    if not model_input.is_prompt:
+                        penalty_are_requested = any([
+                            abs(sg.sampling_params.presence_penalty) >= _SAMPLING_EPS 
+                            or abs(sg.sampling_params.frequency_penalty) >= _SAMPLING_EPS
+                            or abs(sg.sampling_params.repetition_penalty) >= _SAMPLING_EPS
+                            for sg in sampling_metadata.seq_groups])
 
+                        if penalty_are_requested:
+                            # update the output token ids in the output cached for seq in seq_group
+                            # if seq_id not found in the output cached, the output token ids has been updated
+                            # only update when penalty is in the sampling params and it is not prompt request
+                            for seq_group in model_input.sampling_metadata.seq_groups:
+                                seq_ids = seq_group.seq_ids[0] #not support beam search, assume one seq per group
+                                seq_data = seq_group.seq_data[seq_ids]
+                                if seq_ids in cached_sid_output_mapping:
+                                    seq_data.output_token_ids_array[-1] = cached_sid_output_mapping[seq_ids]
                 with self.profiler.record_event(
                         'internal', ('sample_'
                                      f'{"prompt" if is_prompt else "decode"}_'

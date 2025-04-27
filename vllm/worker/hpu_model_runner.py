@@ -2607,14 +2607,9 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                 sid: idx
                 for idx, sid in enumerate(cur_seq_ids) if sid >= 0
             }
-            print("cur seq ids: ", cur_seq_ids)
-            print("cur seq ids pos: ", cur_seq_id_pos)
             htorch.core.mark_step()
-            cached_sid_output_mapping = {}
             for i in range(num_cached):
                 prev_seq_ids = self._get_seq_ids(self.cached_step_inputs[i])
-                print("prev seq ids: ",prev_seq_ids)
-                print(model_input.sampling_metadata.seq_groups)
                 target_indices = [
                     cur_seq_id_pos.get(psi, -1) for psi in prev_seq_ids
                 ]
@@ -2627,10 +2622,6 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                     dtype=model_input.input_tokens.dtype)
                 model_input.input_tokens.index_copy_(
                     0, target_indices, self.cached_step_outputs[i])
-                
-                for idx, sid in enumerate(prev_seq_ids):
-                    cached_sid_output_mapping[sid] = self.cached_step_outputs[i][idx]
-
                 htorch.core.mark_step()
             
             # print("sid vs output: ", cached_sid_output_mapping)
@@ -2834,6 +2825,8 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                 # Only perform sampling in the driver worker.
                 if not self.is_driver_worker:
                     continue
+                
+                is_prev_output_patched = False
 
                 if use_delayed_sampling:
                     fake_output = self._delayed_sampler_outputs(model_input)
@@ -2846,14 +2839,18 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                             for sg in sampling_metadata.seq_groups])
 
                         if penalty_are_requested:
+                            is_prev_output_patched =True
+                            self._patch_prev_output()
                             # update the output token ids in the output cached for seq in seq_group
                             # if seq_id not found in the output cached, the output token ids has been updated
                             # only update when penalty is in the sampling params and it is not prompt request
+                            '''
                             for seq_group in model_input.sampling_metadata.seq_groups:
                                 seq_ids = seq_group.seq_ids[0] #not support beam search, assume one seq per group
                                 seq_data = seq_group.seq_data[seq_ids]
                                 if seq_ids in cached_sid_output_mapping:
                                     seq_data.output_token_ids_array[-1] = cached_sid_output_mapping[seq_ids]
+                            '''
                 with self.profiler.record_event(
                         'internal', ('sample_'
                                      f'{"prompt" if is_prompt else "decode"}_'
@@ -2868,7 +2865,8 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         output = output.sampled_token_ids
                         self.cached_step_outputs.append(output)
                     if use_delayed_sampling and self.is_driver_worker:
-                        self._patch_prev_output()
+                        if not is_prev_output_patched:
+                            self._patch_prev_output()
                         output = self._pad_to_max_num_seqs(
                             output.sampled_token_ids, DUMMY_TOKEN_ID)
                         self.cached_step_outputs.append(output)

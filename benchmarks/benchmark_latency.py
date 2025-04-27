@@ -33,6 +33,7 @@ def main(args: argparse.Namespace):
         top_p=1.0,
         ignore_eos=True,
         max_tokens=args.output_len,
+        repetition_penalty=args.repetition_penalty,
     )
     print(sampling_params)
     dummy_prompt_token_ids = np.random.randint(10000,
@@ -61,12 +62,11 @@ def main(args: argparse.Namespace):
             with torch.profiler.profile(
                     activities=[
                         torch.profiler.ProfilerActivity.CPU,
-                        torch.profiler.ProfilerActivity.CUDA,
+                        torch.profiler.ProfilerActivity.HPU,
                     ],
-                    on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                        str(profile_dir))) as p:
+                    ) as p:
                 llm_generate()
-            print(p.key_averages().table(sort_by="self_cuda_time_total"))
+            p.export_chrome_trace("trace.json")
         else:
             start_time = time.perf_counter()
             llm_generate()
@@ -145,6 +145,7 @@ if __name__ == '__main__':
         type=str,
         default=None,
         help='Path to save the latency results in JSON format.')
+    parser.add_argument('--repetition-penalty', type=float, default=1.0)
 
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()

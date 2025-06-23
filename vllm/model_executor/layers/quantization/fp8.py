@@ -1023,6 +1023,8 @@ class Fp8MoEMethod(FusedMoEMethodBase):
                 final_hidden_states_list = []
                 n_slice = (batched_tokens + self.moe_slice_length -
                            1) // self.moe_slice_length
+                if current_platform.is_hpu():
+                    htorch.core.mark_step()
                 for i in range(n_slice):
                     s = i * self.moe_slice_length
                     e = batched_tokens if i == (n_slice -
@@ -1043,6 +1045,8 @@ class Fp8MoEMethod(FusedMoEMethodBase):
                     experts_max=(num_experts - 1),
                     )
                     final_hidden_states_list.append(current_hidden_states)
+                    if current_platform.is_hpu():
+                        htorch.core.mark_step()
                 final_hidden_states = torch.cat(final_hidden_states_list, dim=0)
             else:
                 final_hidden_states = torch.ops.hpu.mixture_of_experts(

@@ -1022,6 +1022,8 @@ def grouped_topk(hidden_states: torch.Tensor,
     if renormalize:
         topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
 
+    if current_platform.is_hpu():
+        htorch.core.mark_step()
     return topk_weights.to(torch.float32), topk_ids.to(torch.int32)
 
 
@@ -1420,6 +1422,8 @@ def fused_moe(
         topk_weights, topk_ids = custom_routing_function(
             hidden_states, gating_output, topk, renormalize)
 
+    if current_platform.is_hpu():
+        htorch.core.mark_step()
     return fused_experts(hidden_states,
                          w1,
                          w2,

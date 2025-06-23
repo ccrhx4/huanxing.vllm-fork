@@ -362,6 +362,9 @@ class HPUWorker(LocalOrDistributedWorkerBase):
             f"(VLLM_GRAPH_RESERVED_MEM={graph_reserved_mem}), "
             f"{format_bytes(cache_size_bytes)} reserved for KV cache")
         logger.info(msg)
+        import sys
+        sys.exit()
+
         num_hpu_blocks = int(cache_size_bytes // cache_block_size)
         num_cpu_blocks = int(self.cache_config.swap_space_bytes //
                              cache_block_size)

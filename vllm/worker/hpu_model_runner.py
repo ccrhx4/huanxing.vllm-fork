@@ -1875,8 +1875,14 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         max_batch_size = min(self.max_num_seqs,
                              self.max_num_batched_tokens // max_seq_len)
 
-        self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches,
+        import os
+        debug_bs = int(os.environ.get('VLLM_DEBUG_BS', '2'))
+        debug_seq = int(os.environ.get('VLLM_DEBUG_SEQ', '15872'))
+        print("Debugging memory: ", debug_bs, debug_seq)
+
+        self.warmup_scenario(debug_bs, debug_seq, True, kv_caches,
                              False, True, is_profile_run=True)
+
         return
 
     def _dummy_run(self, max_num_batched_tokens: int) -> None:

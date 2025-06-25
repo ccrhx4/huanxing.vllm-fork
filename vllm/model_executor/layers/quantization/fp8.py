@@ -443,10 +443,11 @@ class Fp8LinearMethod(LinearMethodBase):
             )
 
         if current_platform.is_hpu():
-            weight_scale = layer.weight_scale.transpose(0, 1)
+
+            #weight_scale = layer.weight_scale.transpose(0, 1)
             return hpu_ops.apply_fp8_linear_hpu(input=x,
                                                 weight=layer.weight,
-                                                weight_scale=weight_scale,
+                                                weight_scale=layer.weight_scale,
                                                 input_scale=layer.input_scale,
                                                 bias=bias,
                                                 trans_B=False)

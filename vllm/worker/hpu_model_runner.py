@@ -1340,6 +1340,8 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     # Fully cached prompt - compute only last token
                     context_len = context_len - 1
                 prompt_tokens = prompt_tokens[context_len:]
+                print("context len: ", context_len)
+                print("computed_block_nums: ", computed_block_nums)
                 prefix_block_tables.append(computed_block_nums)
             elif self.scheduler_config.chunked_prefill_enabled:
                 if seq_group_metadata.block_tables is not None:
@@ -1512,6 +1514,7 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
             prefix_block_list_tensor = torch.tensor(prefix_block_list,
                                                     dtype=torch.long,
                                                     device='cpu')
+            print("prefix_block_list_tensor: ", prefix_block_list_tensor)
         else:
             prefix_block_list_tensor = None
 

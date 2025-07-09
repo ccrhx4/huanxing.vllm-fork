@@ -1059,6 +1059,8 @@ class Fp8MoEMethod(FusedMoEMethodBase):
                     experts_max=(num_experts - 1),
                     )
                     final_hidden_states_list.append(current_hidden_states)
+                    import habana_frameworks.torch as htorch
+                    htorch.core.mark_step()
                 final_hidden_states = torch.cat(final_hidden_states_list, dim=0)
             else:
                 final_hidden_states = torch.ops.hpu.mixture_of_experts(

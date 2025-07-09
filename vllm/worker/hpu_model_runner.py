@@ -2081,6 +2081,7 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                             len(buckets), batch_size, seq_len)
             self.warmup_scenario(batch_size, seq_len, is_prompt, kv_caches)
 
+
     def warmup_graphs(self,
                       strategy,
                       buckets,
@@ -2307,6 +2308,10 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
             f"Warmup finished in {elapsed_time:.0f} secs, "
             f"allocated {format_bytes(end_mem - start_mem)} of device memory")
         logger.info(msg)
+
+        print("Testing OOM shape. ")       
+        self.warmup_scenario(1, 28544, True, kv_caches)
+
         self.profiler.end()
 
     def finish_measurements(self):
@@ -2784,6 +2789,10 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                                     f"graphs{'T' if use_graphs else 'F'}")
             else:
                 model_event_name = 'model_executable'
+            
+            # debug the shape of OOM
+            print("model_fwd: ", model_event_name)
+
             if num_steps > 1 or use_delayed_sampling:
                 # in case of multi-step scheduling
                 # we only want to pythonize in the last step

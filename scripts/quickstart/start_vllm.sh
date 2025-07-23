@@ -173,6 +173,7 @@ env | grep VLLM
 
 export ENABLE_EXPERIMENTAL_FLAGS=true  
 export HCL_GDR_SLICE_SIZE=512KB
+export VLLM_MOE_GRAPH_BREAK=1
 
 python3 -m vllm.entrypoints.openai.api_server --host $host --port $vllm_port \
 --block-size 128 \

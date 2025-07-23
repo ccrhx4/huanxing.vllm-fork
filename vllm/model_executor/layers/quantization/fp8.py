@@ -51,6 +51,7 @@ ACTIVATION_SCHEMES = ["static", "dynamic"]
 logger = init_logger(__name__)
 
 VLLM_REQUANT_FP8_INC = os.getenv("VLLM_REQUANT_FP8_INC", "0") in ["1", "true"]
+VLLM_MOE_GRAPH_BREAK = os.getenv("VLLM_MOE_GRAPH_BREAK", "0") in ["1", "true"]
 
 
 class Fp8Config(QuantizationConfig):
@@ -1059,8 +1060,8 @@ class Fp8MoEMethod(FusedMoEMethodBase):
                     experts_max=(num_experts - 1),
                     )
                     final_hidden_states_list.append(current_hidden_states)
-                    import habana_frameworks.torch as htorch
-                    htorch.core.mark_step()
+                    if VLLM_MOE_GRAPH_BREAK:
+                        htorch.core.mark_step()
                 final_hidden_states = torch.cat(final_hidden_states_list, dim=0)
             else:
                 final_hidden_states = torch.ops.hpu.mixture_of_experts(

@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 # set -x
 
@@ -23,7 +23,7 @@ Help() {
 }
 
 #Default values for parameters
-model_path=/data/hf_models/DeepSeek-R1-Gaudi
+model_path=/dataset/DeepSeek-R1-G2-static
 vllm_port=8688
 warmup_cache_path=/data/warmup_cache
 max_num_seqs=128
@@ -81,6 +81,7 @@ if hl-smi 2>/dev/null | grep -q HL-225; then
 elif hl-smi 2>/dev/null | grep -q HL-288; then
     echo "Gaudi2 PCIe platform"
     default_decode_bs_step=2
+
 else
     echo "Unknown platform and exit..."
     exit 1
@@ -102,12 +103,6 @@ export VLLM_EP_SIZE=8
 block_size=128
 # DO NOT change ends...
 
-# memory footprint tunning params
-if (( max_model_len <= 16384 )); then
-	export VLLM_GPU_MEMORY_UTILIZATION=0.85
-else
-	export VLLM_GPU_MEMORY_UTILIZATION=0.75
-fi
 export VLLM_GRAPH_RESERVED_MEM=0.2
 export VLLM_GRAPH_PROMPT_RATIO=0
 export VLLM_MLA_DISABLE_REQUANTIZATION=0
@@ -115,6 +110,13 @@ export VLLM_DELAYED_SAMPLING="true"
 export VLLM_MLA_PERFORM_MATRIX_ABSORPTION=0
 #export VLLM_MOE_SLICE_LENGTH=20480
 
+# memory footprint tunning params
+if (( max_model_len <= 16384 )); then
+	export VLLM_GPU_MEMORY_UTILIZATION=0.85
+else
+	export VLLM_GPU_MEMORY_UTILIZATION=0.70
+	export VLLM_GRAPH_RESERVED_MEM=0.18
+fi
 # params
 max_num_batched_tokens=$max_model_len
 input_min=1
@@ -166,6 +168,11 @@ echo " environments are reseted "
 
 env | grep VLLM
 
+#export HCCL_OVER_OFI=1
+#export HCCL_GAUDI_DIRECT=0
+
+export ENABLE_EXPERIMENTAL_FLAGS=true  
+export HCL_GDR_SLICE_SIZE=512KB
 
 python3 -m vllm.entrypoints.openai.api_server --host $host --port $vllm_port \
 --block-size 128 \

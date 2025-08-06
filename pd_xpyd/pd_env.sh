@@ -2,14 +2,14 @@
 
 # set -x
 
-export PATH=$PATH:/usr/local/lib/python3.10/dist-packages/mooncake/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/python3.10/dist-packages/mooncake
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/libfabric/lib:/usr/lib/habanalabs/:/usr/local/lib/
+#export PATH=$PATH:/usr/local/lib/python3.10/dist-packages/mooncake/
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/python3.10/dist-packages/mooncake
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/libfabric/lib:/usr/lib/habanalabs/:/usr/local/lib/
 
 #For PCIE
-export REQUIRED_VERSION=1.22.0
-export LIBFABRIC_ROOT=/opt/libfabric-1.22.0
-export LD_LIBRARY_PATH=$LIBFABRIC_ROOT/lib:$LD_LIBRARY_PATH
+#export REQUIRED_VERSION=1.22.0
+#export LIBFABRIC_ROOT=/opt/libfabric-1.22.0
+#export LD_LIBRARY_PATH=$LIBFABRIC_ROOT/lib:$LD_LIBRARY_PATH
 
 export PT_HPU_LAZY_MODE=1
 

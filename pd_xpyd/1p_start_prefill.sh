@@ -3,6 +3,17 @@
 BASH_DIR=$(dirname "${BASH_SOURCE[0]}")
 
 BENCHMARK_MODE=0
+trap 'cleanup' INT
+
+# Cleanup function
+cleanup() {
+    echo "Caught Ctrl+C, cleaning up..."
+    # Cleanup commands
+    pgrep python3 | xargs kill -9
+    pkill -f python3
+    echo "Cleanup complete. Exiting."
+    exit 0
+}
 
 if [ "$2" == "benchmark" ]; then
     BENCHMARK_MODE=1

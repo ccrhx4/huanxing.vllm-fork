@@ -1,0 +1,61 @@
+FROM  vault.habana.ai/gaudi-docker/1.21.2/ubuntu22.04/habanalabs/pytorch-installer-2.6.0:latest
+
+# Set environment variables to avoid interactive prompts during apt operations
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HTTP_PROXY="http://proxy-prc.intel.com:912/"
+ENV HTTPS_PROXY="http://proxy-prc.intel.com:912/"
+ENV http_proxy="http://proxy-prc.intel.com:912/"
+ENV https_proxy="http://proxy-prc.intel.com:912/"
+
+# Update apt packages and install necessary software
+RUN apt update -y && \
+    apt install -y \
+    curl \
+    git \
+    wget \
+    net-tools \
+    iputils-ping \
+    etcd && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY ./vllm-fork /workspace/vllm
+COPY ./hccl_demo /workspace/hccl_demo
+COPY ./MOE_ParamsV4_1.21.x_CGUID_PT_GC_0709_U22 /workspace/moe
+COPY ./mooncake_transfer_engine-0.1.0-cp310-cp310-manylinux2014_x86_64.whl /workspace/
+
+WORKDIR /workspace/vllm
+
+RUN pip install --upgrade pip && \
+    pip install -v -r requirements-hpu.txt && \
+    pip install /workspace/mooncake_transfer_engine-0.1.0-cp310-cp310-manylinux2014_x86_64.whl && \
+    pip install /workspace/moe/habana_torch_plugin-1.21.2+git8d6847362-cp310-cp310-linux_x86_64.whl && \
+    cp /workspace/moe/*.so /usr/lib/habanalabs/
+
+ENV no_proxy=localhost,127.0.0.1
+ENV PT_HPU_ENABLE_LAZY_COLLECTIVES=true
+
+RUN pip install -e .
+
+ENV REQUIRED_VERSION=1.22.0
+ENV LIBFABRIC_ROOT=/usr/libfabric
+ENV LD_LIBRARY_PATH=$LIBFABRIC_ROOT/lib:$LD_LIBRARY_PATH
+
+RUN wget https://github.com/ofiwg/libfabric/releases/download/v$REQUIRED_VERSION/libfabric-$REQUIRED_VERSION.tar.bz2 -P /tmp/libfabric && \
+    cd /tmp/libfabric && \
+    tar -xf libfabric-$REQUIRED_VERSION.tar.bz2 && \
+    mkdir -p ${LIBFABRIC_ROOT} && \
+    chmod 777 ${LIBFABRIC_ROOT} && \
+    cd libfabric-$REQUIRED_VERSION/ && \
+    ./configure --prefix=$LIBFABRIC_ROOT --with-synapseai=/usr && \
+    make -j 32 && make install && \
+    cd /tmp && \
+    git clone https://github.com/HabanaAI/hccl_ofi_wrapper.git && \
+    cd /tmp/hccl_ofi_wrapper && \
+    make && cp libhccl_ofi_wrapper.so /usr/lib/habanalabs/
+   
+RUN cd /workspace/hccl_demo/ && make
+
+ENV PATH=/usr/local/lib/python3.10/dist-packages/mooncake:$PATH
+
+WORKDIR /workspace/
+

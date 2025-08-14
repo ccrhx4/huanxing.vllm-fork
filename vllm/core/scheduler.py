@@ -573,8 +573,8 @@ class Scheduler:
                 # This is a shutdown signal
                 logger.info("The fetching thread is shutting down.")
                 return
-
-            self.scheduler_profiler.start('internal', 'fetching_kv')
+            profiler_args = {'seq_ids': seq_group.seq_ids}
+            self.scheduler_profiler.start('internal', 'fetching_kv', args=profiler_args)
             hash_prefix = hash_list(seq_group.prompt_token_ids)
             prefix, kv_cache, hidden_states = get_kv_and_hidden_states(
                 hash_prefix)

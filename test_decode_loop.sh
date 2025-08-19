@@ -1,6 +1,7 @@
 #!/bin/bash
 
 model=/mnt/disk2/hf_models/DeepSeek-R1-BF16-w8afp8-static-no-ste-G2/
+#model=/mnt/disk2/hf_models/DeepSeek-R1-G2/
 serverport=8868
 serverip=localhost
 
@@ -51,38 +52,35 @@ python3 benchmarks/benchmark_serving.py \
 
 }
 
-repeat=127
+benchmark_repeat() {
+  local num_repeat=$1
+  local input_len=$2
+  local output_len=$3
+  local port=$4
 
-kill_proxy_server $serverport
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000
-kill_proxy_server $serverport
+  for i in {1..3}
+  do
+    echo "running: $num_repeat, $i, $input_len, $output_len"	  
+    kill_proxy_server $port
+    launch_proxy $num_repeat
+    wait_for_server $port
+    benchmark $input_len $output_len
+    kill_proxy_server $port
+  done
+}
 
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000
-kill_proxy_server $serverport
+#repeat=319
+#benchmark_repeat $repeat 2000 2000 $serverport
 
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000
-kill_proxy_server $serverport
+#repeat=351
+#benchmark_repeat $repeat 2000 2000 $serverport
 
-repeat=63
+repeat=255
+benchmark_repeat $repeat 2000 2000 $serverport
 
-echo "running $repeat======================="
-kill_proxy_server $serverport
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000
-kill_proxy_server $serverport
+#repeat=415
+#benchmark_repeat $repeat 2000 2000 $serverport
 
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000
-kill_proxy_server $serverport
+#repeat=447
+#benchmark_repeat $repeat 2000 2000 $serverport
 
-launch_proxy $repeat
-wait_for_server $serverport
-benchmark 2000 2000

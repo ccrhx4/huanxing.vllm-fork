@@ -30,7 +30,7 @@ export VLLM_EP_SIZE=8
 export VLLM_DELAYED_SAMPLING="false"
 export VLLM_MLA_PERFORM_MATRIX_ABSORPTION=0
 
-export VLLM_USE_ASYNC_TRANSFER_IN_PD=0
+export VLLM_USE_ASYNC_TRANSFER_IN_PD=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=600
 
 block_size=128
@@ -39,13 +39,13 @@ block_size=128
 unset VLLM_HPU_LOG_STEP_GRAPH_COMPILATION PT_HPU_METRICS_GC_DETAILS GRAPH_VISUALIZATION
 export VLLM_HPU_LOG_STEP_GRAPH_COMPILATION=true
 export PT_HPU_METRICS_GC_DETAILS=1
-export GRAPH_VISUALIZATION=1
+export GRAPH_VISUALIZATION=0
 
-#hl-prof-config --use-template profile_api_with_nics --fuser on --trace-analyzer on --gaudi2 --merged "hltv,csv"
+hl-prof-config --use-template profile_api_with_nics --gaudi2 -invoc csv,hltv -merged csv,hltv --trace-analyzer-csv on
 
 #export HABANA_PROFILE=1
 #export VLLM_PROFILER_ENABLED=full
-#export VLLM_TORCH_PROFILER_DIR=/workspace/
+#export VLLM_TORCH_PROFILER_DIR=/workspace/workdir/profile_result
 #export HABANA_PROFILE_WRITE_HLTV=1
 
 #unset VLLM_HPU_LOG_STEP_GRAPH_COMPILATION PT_HPU_METRICS_GC_DETAILS GRAPH_VISUALIZATION

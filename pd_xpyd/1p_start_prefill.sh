@@ -17,7 +17,7 @@ cleanup() {
 
 if [ "$2" == "benchmark" ]; then
     BENCHMARK_MODE=1
-    sed -i 's/export VLLM_USE_ASYNC_TRANSFER_IN_PD=.*/export VLLM_USE_ASYNC_TRANSFER_IN_PD=0/' $BASH_DIR/pd_env.sh
+    sed -i 's/export VLLM_USE_ASYNC_TRANSFER_IN_PD=.*/export VLLM_USE_ASYNC_TRANSFER_IN_PD=1/' $BASH_DIR/pd_env.sh
     echo " Benchmark mode enabled"
 else
     sed -i 's/export VLLM_USE_ASYNC_TRANSFER_IN_PD=.*/export VLLM_USE_ASYNC_TRANSFER_IN_PD=1/' $BASH_DIR/pd_env.sh
@@ -41,9 +41,6 @@ export MOONCAKE_CONFIG_PATH="$BASH_DIR"/mooncake_${1:-g10}.json
 echo "Using Mooncake config: $MOONCAKE_CONFIG_PATH"
 
 source "$BASH_DIR"/dp_p_env.sh
-
-#unset VLLM_SKIP_WARMUP
-#export PT_HPU_RECIPE_CACHE_CONFIG=./_prefill_cache,false,16384
 
 timestamp=$(date +"%Y%m%d_%H%M%S")
 log_dir="xpyd_logs"

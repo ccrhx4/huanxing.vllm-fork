@@ -150,13 +150,13 @@ class Proxy:
 
     def setup_routes(self):
         self.router.post(
-            "/v1/completions",
+            "/v1/prefill/completions",
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.custom_create_completion if self.
                custom_create_completion else self.create_completion)
         self.router.post(
-            "/v1/prefill/completions",
+            "/v1/chat/completions",
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.custom_create_chat_completion if self.

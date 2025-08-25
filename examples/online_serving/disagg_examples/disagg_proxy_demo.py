@@ -19,7 +19,6 @@ from fastapi import (APIRouter, Depends, FastAPI, Header, HTTPException,
                      Request, status)
 from fastapi.responses import JSONResponse, StreamingResponse
 from transformers import AutoTokenizer
-
 formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s",
                               "%Y-%m-%d %H:%M:%S")
 handler = logging.StreamHandler()
@@ -47,10 +46,10 @@ def log_info_red(msg):
     logger.info("%s%s%s", escape_codes['red'], msg, escape_codes['reset'])
 
 
-AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60,
-                                        connect=60,
-                                        sock_read=1200,
-                                        sock_connect=30)
+AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=60 * 60 * 60,
+                                        connect=60000,
+                                        sock_read=120000,
+                                        sock_connect=3000)
 
 
 async def P_first_token_generator(generator_p,
@@ -157,6 +156,8 @@ class Proxy:
         self.router.post("/instances/add",
                          dependencies=[Depends(self.api_key_authenticate)
                                        ])(self.add_instance_endpoint)
+        self.router.get("/v1/models",
+                         response_class=JSONResponse)(self.get_models)
 
     async def validate_json_request(self, raw_request: Request):
         content_type = raw_request.headers.get("content-type", "").lower()
@@ -493,6 +494,17 @@ class Proxy:
             return StreamingResponse(content=iter(error_messages),
                                      media_type="application/json")
 
+    async def get_models(self, request:Request):
+        instance =None
+        with self.scheduling_policy.lock:
+            for ins in self.prefill_instances:
+                instance = ins
+                break
+        if instance != None:
+            response = requests.get(f"http://{instance}/v1/models")
+            return response.json()
+        return JSONResponse(content={})
+    
     def remove_instance_endpoint(self, instance_type, instance):
         with self.scheduling_policy.lock:
             if (instance_type == "decode"

@@ -43,7 +43,7 @@ export VLLM_DP_SIZE=1
 export VLLM_USE_V1=0
 
 unset VLLM_SKIP_WARMUP
-export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww35_inc_fp8_p,false,131072
+export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww35_inc_bf16_p,false,131072
 
 if [ "$INC_FP8" -eq 1 ]; then
   export QUANT_CONFIG="$BASH_DIR"/inc_fp8_tp8ep8.json

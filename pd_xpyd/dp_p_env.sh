@@ -10,12 +10,12 @@ export VLLM_GPU_MEMORY_UTILIZATION=0.7
 export VLLM_GRAPH_RESERVED_MEM=0.1
 export VLLM_GRAPH_PROMPT_RATIO=1
 # params
-model_len=16384
+model_len=4096
 max_num_batched_tokens=16384
-max_num_seqs=8
+max_num_seqs=4
 input_min=128
-input_max=16384
-output_max=16384
+input_max=4096
+output_max=4096
 
 unset VLLM_PROMPT_BS_BUCKET_MIN VLLM_PROMPT_BS_BUCKET_STEP VLLM_PROMPT_BS_BUCKET_MAX
 unset VLLM_PROMPT_SEQ_BUCKET_MIN VLLM_PROMPT_SEQ_BUCKET_STEP VLLM_PROMPT_SEQ_BUCKET_MAX
@@ -42,8 +42,8 @@ export VLLM_SKIP_WARMUP=True
 export VLLM_DP_SIZE=1
 export VLLM_USE_V1=0
 
-#unset VLLM_SKIP_WARMUP
-#export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww33_inc_fp8_p,false,131072
+unset VLLM_SKIP_WARMUP
+export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww35_inc_fp8_p,false,131072
 
 if [ "$INC_FP8" -eq 1 ]; then
   export QUANT_CONFIG="$BASH_DIR"/inc_fp8_tp8ep8.json

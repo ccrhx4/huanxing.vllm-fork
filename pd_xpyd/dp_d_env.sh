@@ -13,12 +13,12 @@ export VLLM_GRAPH_PROMPT_RATIO=0
 export VLLM_DELAYED_SAMPLING="true"
 
 # params
-model_len=16384
+model_len=4096
 max_num_batched_tokens=16384
-max_num_seqs=64
+max_num_seqs=48
 input_min=128
-input_max=16384
-output_max=16384
+input_max=4096
+output_max=4096
 
 unset VLLM_PROMPT_BS_BUCKET_MIN VLLM_PROMPT_BS_BUCKET_STEP VLLM_PROMPT_BS_BUCKET_MAX
 unset VLLM_PROMPT_SEQ_BUCKET_MIN VLLM_PROMPT_SEQ_BUCKET_STEP VLLM_PROMPT_SEQ_BUCKET_MAX
@@ -35,7 +35,7 @@ export VLLM_PROMPT_SEQ_BUCKET_STEP=128
 export VLLM_PROMPT_SEQ_BUCKET_MAX=1
 
 #export VLLM_DECODE_BLOCK_BUCKET_MIN=2048
-export VLLM_DECODE_BS_BUCKET_STEP=2
+export VLLM_DECODE_BS_BUCKET_STEP=4
 #export VLLM_DECODE_BLOCK_BUCKET_STEP=2
 
 echo " environments are reseted "
@@ -46,8 +46,8 @@ env | grep VLLM_DECODE_BS
 env | grep VLLM_DECODE_BLOCK
 
 export VLLM_SKIP_WARMUP=True
-#unset VLLM_SKIP_WARMUP
-#export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww33_inc_fp8_d,false,131072
+unset VLLM_SKIP_WARMUP
+export PT_HPU_RECIPE_CACHE_CONFIG=/workspace/ww35_inc_fp8_d,false,131072
 
 export VLLM_DP_SIZE=2
 export VLLM_USE_V1=0

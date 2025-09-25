@@ -17,6 +17,7 @@ import uvloop
 from PIL import Image
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
+from torch.profiler import profile, ProfilerActivity, record_function
 
 from benchmark_dataset import (
     AIMODataset,
@@ -76,6 +77,14 @@ def lora_path_on_disk(lora_path: str) -> str:
 
 lora_tokenizer_cache: dict[int, AnyTokenizer] = {}
 
+
+def is_profile_true():
+    val = os.getenv("PROFILE")
+    if val is None:
+        return False
+    # Normalize case
+    val_lower = val.strip().lower()
+    return val_lower in ("true", "1", "yes", "on")
 
 def get_random_lora_request(
     args: argparse.Namespace,
@@ -216,9 +225,18 @@ def run_vllm(
     outputs = None
     if not use_beam_search:
         start = time.perf_counter()
-        outputs = llm.generate(
-            prompts, sampling_params, lora_request=lora_requests, use_tqdm=True
-        )
+        if is_profile_true():
+            with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.HPU], with_stack=True) as prof:
+                with record_function("model_inference"):
+                    outputs = llm.generate(
+                        prompts, sampling_params, lora_request=lora_requests, use_tqdm=True
+                    )
+            prof.export_chrome_trace("trace_compile_disable_attn_in_extension.json")
+        else:
+            outputs = llm.generate(
+                    prompts, sampling_params, lora_request=lora_requests, use_tqdm=True
+            )
+
         end = time.perf_counter()
     else:
         assert lora_requests is None, "BeamSearch API does not support LoRA"

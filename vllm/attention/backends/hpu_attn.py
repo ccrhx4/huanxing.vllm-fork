@@ -457,7 +457,7 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
                     seq_len=self.max_seq_len,
                     dtype=self.alibi_slopes.dtype,
                 )
-
+    # @torch.compiler.disable
     def forward(
         self,
         layer: AttentionLayer,

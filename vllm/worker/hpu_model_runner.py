@@ -1650,6 +1650,7 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     computed_block_nums) > 0 and self.sliding_window is None:
                 # Prefix is not supported with sliding_window
                 context_len = len(computed_block_nums) * self.block_size
+                print("seq_len, context_len: ", seq_len, context_len)
                 if context_len == seq_len \
                 and self.use_prefix_caching:
                     # Fully cached prompt - compute only last token

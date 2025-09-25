@@ -1369,20 +1369,38 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                        align_worker=False):
         real_batch_size = len(seq_group_metadata_list)
         ctx = seq_group_metadata_list[0].computed_block_nums
-        ctx = 0 if ctx is None else sum(ctx)
+        ctx_sum = 0 if ctx is None else len(ctx)
+
+        print("ctx_sum: ", ctx_sum)
+
+        #ctx_sum = 0 if ctx is None else sum(ctx)
+        min_context_len = torch.iinfo(torch.int64).max
+        for seq_group in seq_group_metadata_list:
+            context_len = 0
+            if seq_group.computed_block_nums is not None:
+                context_len = len(seq_group.computed_block_nums) * 128
+            if context_len < min_context_len:
+                min_context_len = context_len
+
         batch_size_padded = real_batch_size
         if is_prompt:
             first_key = next(iter(seq_group_metadata_list[0].seq_data))
             seq_len = len(seq_group_metadata_list[0].seq_data[first_key].
                           prompt_token_ids)
-            query_len = seq_len - ctx * self.block_size
+            print("add dummy seq: seq_len, ctx: ", seq_len, ctx_sum)
+            if ctx_sum == 0:
+                query_len = seq_len
+                ctx = 0
+            else:
+                query_len = seq_len - min_context_len
+            
             if real_batch_size > 1 and self.use_merged_prefill:
                 real_batch_size = 1
             batch_size_padded = self.bucketing_manager.find_prompt_bucket(
                 real_batch_size, query_len, ctx)[0]
         else:
             batch_size_padded = self.bucketing_manager.find_decode_bucket(
-                real_batch_size, ctx)[0]
+                real_batch_size, ctx_sum)[0]
         if self.dp_awared_padding and (self.vllm_config.kv_transfer_config
                                        is None or not is_prompt):
             if self.is_driver_worker:
@@ -3959,6 +3977,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                                     f"graphs{'T' if use_graphs else 'F'}")
             else:
                 model_event_name = 'model_executable'
+            print(model_event_name)
             if num_steps > 1 or use_delayed_sampling:
                 # in case of multi-step scheduling
                 # we only want to pythonize in the last step

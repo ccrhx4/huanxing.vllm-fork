@@ -1371,33 +1371,19 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         ctx = seq_group_metadata_list[0].computed_block_nums
         ctx_sum = 0 if ctx is None else len(ctx)
 
-        print("ctx_sum: ", ctx_sum)
-
-        #ctx_sum = 0 if ctx is None else sum(ctx)
-        min_context_len = torch.iinfo(torch.int64).max
-        for seq_group in seq_group_metadata_list:
-            context_len = 0
-            if seq_group.computed_block_nums is not None:
-                context_len = len(seq_group.computed_block_nums) * 128
-            if context_len < min_context_len:
-                min_context_len = context_len
-
         batch_size_padded = real_batch_size
         if is_prompt:
             first_key = next(iter(seq_group_metadata_list[0].seq_data))
             seq_len = len(seq_group_metadata_list[0].seq_data[first_key].
                           prompt_token_ids)
-            print("add dummy seq: seq_len, ctx: ", seq_len, ctx_sum)
-            if ctx_sum == 0:
-                query_len = seq_len
-                ctx = 0
-            else:
-                query_len = seq_len - min_context_len
+
+            context_len = ctx_sum * self.block_size
+            query_len = seq_len - context_len
             
             if real_batch_size > 1 and self.use_merged_prefill:
                 real_batch_size = 1
             batch_size_padded = self.bucketing_manager.find_prompt_bucket(
-                real_batch_size, query_len, ctx)[0]
+                real_batch_size, query_len, ctx_sum)[0]
         else:
             batch_size_padded = self.bucketing_manager.find_decode_bucket(
                 real_batch_size, ctx_sum)[0]
@@ -1668,7 +1654,7 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     computed_block_nums) > 0 and self.sliding_window is None:
                 # Prefix is not supported with sliding_window
                 context_len = len(computed_block_nums) * self.block_size
-                print("seq_len, context_len: ", seq_len, context_len)
+                logger.debug(f"seq_len {seq_len}, context_len {context_len} ")
                 if context_len == seq_len \
                 and self.use_prefix_caching:
                     # Fully cached prompt - compute only last token
@@ -3651,7 +3637,10 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
         is_prompt = attn_metadata.is_prompt
         is_prefix_prefill = is_prompt and attn_metadata.block_list is not None
         if is_prompt and is_prefix_prefill:
-            phase_type = PhaseType.PREFIX_PREFILL
+            if self.is_skip_3d_warmup_true():
+                phase_type = PhaseType.PREFILL
+            else:
+                phase_type = PhaseType.PREFIX_PREFILL
         elif is_prompt and not is_prefix_prefill:
             phase_type = PhaseType.PREFILL
         elif not is_prompt:
@@ -3660,6 +3649,14 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
             raise ValueError("Unrecognized pass type, likely due to malformed "
                              "attention metadata")
         return phase_type
+    
+    def is_skip_3d_warmup_true(self):
+        val = os.getenv("VLLM_SKIP_3D_WARMUP")
+        if val is None:
+            return False
+        # Normalize case
+        val_lower = val.strip().lower()
+        return val_lower in ("true", "1", "yes", "on")
 
     def _check_config(self, batch_size, seq_len, ctx, attn_metadata,
                       warmup_mode):
@@ -3670,6 +3667,9 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
             phase = self._phase(attn_metadata)
             num_blocks = self._num_blocks(attn_metadata)
             cfg = (batch_size, seq_len, num_blocks, phase)
+            if not warmup_mode:
+                if attn_metadata.is_prompt and num_blocks > 0 and self.is_skip_3d_warmup_true():
+                    cfg = (batch_size, seq_len, 0, phase)
         else:
             phase = 'prompt' if attn_metadata.is_prompt else 'decode'
             cfg = (batch_size, seq_len, phase)
@@ -3977,7 +3977,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                                     f"graphs{'T' if use_graphs else 'F'}")
             else:
                 model_event_name = 'model_executable'
-            print(model_event_name)
+            logger.debug(model_event_name)
             if num_steps > 1 or use_delayed_sampling:
                 # in case of multi-step scheduling
                 # we only want to pythonize in the last step

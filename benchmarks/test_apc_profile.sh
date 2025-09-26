@@ -13,6 +13,6 @@ python benchmark_prefix_caching.py \
 	--max-num-seqs 8 \
         --enable-prefix-caching \
         --num-prompts 1 \
-        --repeat-count 24 \
-        --input-length-range 250:256 \
+        --repeat-count 200 \
+        --input-length-range 256:260 \
         --output-len 1

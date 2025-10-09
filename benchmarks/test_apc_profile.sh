@@ -3,9 +3,11 @@
 model=meta-llama/Llama-3.1-8B
 
 echo "=============With APC RUN===================="
-PROFILE=0 \
+PROFILE=1 \
+VLLM_PROMPT_USE_FUSEDSDPA=0 \
 VLLM_SKIP_3D_WARMUP=1 \
 VLLM_DISABLE_COMPILE_FSDPA=1 \
+VLLM_DISABLE_COMPILE_PREFILL=0 \
 VLLM_PROMPT_SEQ_BUCKET_MAX=512 \
 python benchmark_prefix_caching.py \
         --model $model \

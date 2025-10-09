@@ -27,6 +27,18 @@ from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 
+def is_disable_prefill_compile_true():
+    val = os.getenv("VLLM_DISABLE_COMPILE_PREFILL")
+    if val is None:
+        return False
+    val_lower = val.strip().lower()
+    return val_lower in ("true", "1", "yes", "on")
+
+def conditional_disable_compiler(function):
+    if is_disable_prefill_compile_true():
+        return torch.compiler.disable()(function)
+    else:
+        return function
 
 class HPUAttentionBackend(AttentionBackend):
 
@@ -457,7 +469,8 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
                     seq_len=self.max_seq_len,
                     dtype=self.alibi_slopes.dtype,
                 )
-    # @torch.compiler.disable
+
+    @conditional_disable_compiler
     def forward(
         self,
         layer: AttentionLayer,

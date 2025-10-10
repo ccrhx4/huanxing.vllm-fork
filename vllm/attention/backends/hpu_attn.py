@@ -471,7 +471,7 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
                 )
 
     @conditional_disable_compiler
-    def forward(
+    def _forward_prefill(
         self,
         layer: AttentionLayer,
         query: torch.Tensor,
@@ -479,31 +479,7 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
         value: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: HPUAttentionMetadata,
-        output: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Forward pass with xFormers and PagedAttention.
-
-        Args:
-            query: shape = [num_tokens, num_heads * head_size]
-            key: shape = [num_tokens, num_kv_heads * head_size]
-            value: shape = [num_tokens, num_kv_heads * head_size]
-            kv_cache = [2, num_blocks, block_size * num_kv_heads * head_size]
-            attn_metadata: Metadata for attention.
-        Returns:
-            shape = [num_tokens, num_heads * head_size]
-        """
-        assert layer._k_scale_float == 1.0 and layer._v_scale_float == 1.0
-        if self.attn_type == AttentionType.ENCODER_DECODER:
-            return self.forward_encoder_decoder(
-                query=query,
-                key=key,
-                value=value,
-                kv_cache=kv_cache,
-                attn_metadata=attn_metadata,
-                k_scale=layer._k_scale_float,
-                v_scale=layer._k_scale_float,
-            )
-
         batch_size, seq_len, hidden_size = query.shape
         _, seq_len_kv, _ = key.shape
 
@@ -600,6 +576,69 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
                 **common_args)
 
             output = out.reshape(batch_size, seq_len, hidden_size)
+        return output.view(batch_size, seq_len, hidden_size)
+
+    def forward(
+        self,
+        layer: AttentionLayer,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        kv_cache: torch.Tensor,
+        attn_metadata: HPUAttentionMetadata,
+        output: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Forward pass with xFormers and PagedAttention.
+
+        Args:
+            query: shape = [num_tokens, num_heads * head_size]
+            key: shape = [num_tokens, num_kv_heads * head_size]
+            value: shape = [num_tokens, num_kv_heads * head_size]
+            kv_cache = [2, num_blocks, block_size * num_kv_heads * head_size]
+            attn_metadata: Metadata for attention.
+        Returns:
+            shape = [num_tokens, num_heads * head_size]
+        """
+        assert layer._k_scale_float == 1.0 and layer._v_scale_float == 1.0
+        
+        
+        if self.attn_type == AttentionType.ENCODER_DECODER:
+            return self.forward_encoder_decoder(
+                query=query,
+                key=key,
+                value=value,
+                kv_cache=kv_cache,
+                attn_metadata=attn_metadata,
+                k_scale=layer._k_scale_float,
+                v_scale=layer._k_scale_float,
+            )
+
+        if attn_metadata.is_prompt:
+             return self._forward_prefill(layer, query, key, value, kv_cache,
+                                         attn_metadata)
+        
+        batch_size, seq_len, hidden_size = query.shape
+        _, seq_len_kv, _ = key.shape
+
+        key = key.view(-1, self.num_kv_heads, self.head_size)
+        value = value.view(-1, self.num_kv_heads, self.head_size)
+        slot_mapping = attn_metadata.slot_mapping.flatten(
+        ) if attn_metadata.slot_mapping is not None else None
+        key_cache = None
+        value_cache = None
+        if kv_cache is not None and isinstance(kv_cache, tuple):
+            key_cache, value_cache = HPUPagedAttention.split_kv_cache(
+                kv_cache, self.num_kv_heads, self.head_size)
+
+            # Reshape the input keys and values and store them in the cache.
+            # If kv_cache is not provided, the new key and value tensors are
+            # not cached. This happens during the initial memory profiling run.
+            key_cache = self.k_cache(key, key_cache, slot_mapping)
+            value_cache = self.v_cache(value, value_cache, slot_mapping)
+
+        if attn_metadata.is_prompt:
+             return self._forward_prefill(layer, query, key, value, kv_cache,
+                                         attn_metadata)
         else:
             # Decoding run.
             if self.sliding_window and \

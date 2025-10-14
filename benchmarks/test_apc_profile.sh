@@ -4,7 +4,7 @@ model=meta-llama/Llama-3.1-8B
 
 echo "=============With APC RUN===================="
 PROFILE=1 \
-VLLM_PROMPT_USE_FUSEDSDPA=0 \
+VLLM_PROMPT_USE_FUSEDSDPA=1 \
 VLLM_SKIP_3D_WARMUP=1 \
 VLLM_DISABLE_COMPILE_FSDPA=1 \
 VLLM_DISABLE_COMPILE_PREFILL=1 \
@@ -15,6 +15,6 @@ python benchmark_prefix_caching.py \
 	--max-num-seqs 8 \
         --enable-prefix-caching \
         --num-prompts 1 \
-        --repeat-count 100 \
+        --repeat-count 20 \
         --input-length-range 256:260 \
         --output-len 1

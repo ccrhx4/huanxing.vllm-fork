@@ -6,8 +6,8 @@ echo "=============With APC RUN===================="
 PROFILE=1 \
 VLLM_PROMPT_USE_FUSEDSDPA=1 \
 VLLM_SKIP_3D_WARMUP=1 \
-VLLM_DISABLE_COMPILE_FSDPA=1 \
-VLLM_DISABLE_COMPILE_PREFILL=1 \
+VLLM_DISABLE_COMPILE_FSDPA=0 \
+VLLM_DISABLE_COMPILE_PREFILL=0 \
 VLLM_PROMPT_SEQ_BUCKET_MAX=512 \
 python benchmark_prefix_caching.py \
         --model $model \
@@ -16,5 +16,5 @@ python benchmark_prefix_caching.py \
         --enable-prefix-caching \
         --num-prompts 1 \
         --repeat-count 20 \
-        --input-length-range 256:260 \
+        --input-length-range 1024:1040 \
         --output-len 1

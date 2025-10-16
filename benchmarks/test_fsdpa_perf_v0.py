@@ -9,28 +9,42 @@ from habana_frameworks.torch.hpex.kernels import FusedSDPA
 
 device = "hpu"
 
-query = torch.rand(32768, 1, 32, 128, dtype=torch.bfloat16).to(device) #sdpa_args["query"]
-key = torch.rand(32768, 1, 8, 128, dtype=torch.bfloat16).to(device) #sdpa_args["key"] 
-value = torch.rand(32768, 1, 8, 128, dtype=torch.bfloat16).to(device) # sdpa_args["value"]
+
+batch = 1
+q_len = 16384
+kv_len = 16384  # past + maybe current
+n_heads_q = 32
+n_heads_kv = 8
+head_dim = 128
+
+# GLM config TP4
+q_len = 32768
+kv_len = 32768  # past + maybe current
+n_heads_q = 24
+
+# Dummy Q, K, V
+# Create query with full heads
+query = torch.randn(batch, n_heads_q, q_len, head_dim, device=device)
+
+# Create key/value with fewer heads
+key   = torch.randn(batch, n_heads_kv, kv_len, head_dim, device=device)
+value = torch.randn(batch, n_heads_kv, kv_len, head_dim, device=device)
 
 
 def m(query, key, value):
-  q, k, v = [x.transpose(0, 1).transpose(1, 2) for x in [query, key, value]]
   causal = True
   scale = None
   attn_mask = None
   
   attention_dropout = 0.0
-  use_fast_softmax = "None"
+  use_fast_softmax = "fast"
   use_fused_sdpa_with_recompute = True
   
   context_layer = FusedSDPA.apply(
-            q, k, v, attn_mask, attention_dropout, causal, scale,
+            query, key, value, attn_mask, attention_dropout, causal, scale,
             use_fast_softmax, use_fused_sdpa_with_recompute
         )
   
-  # [b, np, sq, hn] --> [sq, b, np, hn]
-  context_layer = context_layer.permute(2, 0, 1, 3).contiguous()
   return context_layer
 
 print("Begin running")

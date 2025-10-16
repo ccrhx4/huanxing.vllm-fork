@@ -1,3 +1,4 @@
+import argparse
 import torch
 import time
 import torch.nn as nn
@@ -9,18 +10,24 @@ from habana_frameworks.torch.hpex.kernels import FusedSDPA
 
 device = "hpu"
 
+parser = argparse.ArgumentParser(description="GQA attention with variable batch & q_len")
+parser.add_argument("--batch", type=int, required=True, help="Batch size")
+parser.add_argument("--q_len", type=int, required=True, help="Query length")
+parser.add_argument("--kv_len", type=int, default=None, help="Key/Value length (defaults to 2 * q_len if not provided)")
 
-batch = 1
-q_len = 16384
-kv_len = 16384  # past + maybe current
+args = parser.parse_args()
+
+batch = args.batch
+q_len = args.q_len
+kv_len = args.kv_len  # past + maybe current
+
+# Llama
 n_heads_q = 32
 n_heads_kv = 8
 head_dim = 128
 
 # GLM config TP4
-q_len = 32768
-kv_len = 32768  # past + maybe current
-n_heads_q = 24
+# n_heads_q = 24
 
 # Dummy Q, K, V
 # Create query with full heads
@@ -47,7 +54,7 @@ def m(query, key, value):
   
   return context_layer
 
-print("Begin running")
+print("Begin running", batch, q_len, kv_len)
 start = time.time()
 
 output = m(query, key, value)

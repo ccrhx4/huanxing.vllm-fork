@@ -92,7 +92,7 @@ wait_for_server() {
 
 SERVER="lm"
 TP_SIZE=1
-MODEL="llama3.1/Meta-Llama-3.1-8B-Instruct"
+MODEL="meta-llama/Llama-3.1-8B-Instruct"
 
 main() {
     while [[ "$#" -gt 0 ]]; do
@@ -163,7 +163,7 @@ main() {
     echo "All servers are up. Starting benchmark..."
 
     # begin benchmark
-    cd ../../../../../benchmarks/
+    cd /vllm-fork/benchmarks/
     python benchmark_serving.py  --port 1000 --seed 12345 \
         --model $MODEL \
         --dataset-name random --random-input-len 8000 --random-output-len 200 \

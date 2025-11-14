@@ -46,6 +46,7 @@ class KVConnectorFactory:
             raise ValueError(f"Unsupported connector type: {connector_name}")
 
         connector_cls = cls._registry[connector_name]()
+        print("connector_cls: ", connector_cls)
         assert issubclass(connector_cls, KVConnectorBase)
         return connector_cls(rank, local_rank, config)
 

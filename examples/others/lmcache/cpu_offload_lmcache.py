@@ -28,7 +28,7 @@ import os
 import time
 from dataclasses import asdict
 
-from lmcache.experimental.cache_engine import LMCacheEngineBuilder
+#from lmcache.v1.cache_engine import LMCacheEngineBuilder
 from lmcache.integration.vllm.utils import ENGINE_NAME
 
 from vllm import LLM, SamplingParams
@@ -65,7 +65,7 @@ def build_llm_with_lmcache(lmcache_connector: str, model: str, vllm_version: str
             kv_transfer_config=ktc,
             max_model_len=8000,
             gpu_memory_utilization=0.8,
-            enable_chunked_prefill=True,  # Only in v0
+            enable_chunked_prefill=False,  # Only in v0
         )
     else:
         llm_args = EngineArgs(

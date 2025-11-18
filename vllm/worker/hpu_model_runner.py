@@ -3811,13 +3811,12 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         selected_token_indices=sampling_metadata.
                         selected_token_indices)
                     hidden_states, bypass_model_exec, model_input = \
-                    get_kv_transfer_group().recv_kv_caches_and_hidden_states_hpu(
+                    get_kv_transfer_group().recv_kv_caches_and_hidden_states(
                         # model is used to know which layer the current worker
                         # is working on, so that we can receive KV for
                         # only those layers.
                         self.get_model(),
                         model_input,
-                        attn_metadata,
                         kv_caches=kv_caches
                     )
                 profiler_args = {

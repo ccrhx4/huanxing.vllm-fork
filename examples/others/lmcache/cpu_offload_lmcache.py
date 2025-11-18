@@ -28,7 +28,10 @@ import os
 import time
 from dataclasses import asdict
 
-#from lmcache.v1.cache_engine import LMCacheEngineBuilder
+# WA: temporary disable lmcache.v1
+# from lmcache.v1.cache_engine import LMCacheEngineBuilder
+from lmcache.experimental.cache_engine import LMCacheEngineBuilder
+
 from lmcache.integration.vllm.utils import ENGINE_NAME
 
 from vllm import LLM, SamplingParams
@@ -108,7 +111,7 @@ def parse_args():
         "-v",
         "--version",
         choices=["v0", "v1"],
-        default="v1",
+        default="v0",
         help="Specify vLLM version (default: v1)",
     )
     return parser.parse_args()

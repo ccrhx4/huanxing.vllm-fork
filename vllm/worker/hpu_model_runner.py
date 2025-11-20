@@ -3765,6 +3765,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                                     f"graphs{'T' if use_graphs else 'F'}")
             else:
                 model_event_name = 'model_executable'
+            print(model_event_name)
             if num_steps > 1 or use_delayed_sampling:
                 # in case of multi-step scheduling
                 # we only want to pythonize in the last step
@@ -3810,6 +3811,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         **execute_model_kwargs,
                         selected_token_indices=sampling_metadata.
                         selected_token_indices)
+                    print("attn metadata: ", attn_metadata)
                     hidden_states, bypass_model_exec, model_input = \
                     get_kv_transfer_group().recv_kv_caches_and_hidden_states(
                         # model is used to know which layer the current worker
@@ -3870,7 +3872,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                 # TODO: update send operation to blocking one.
                 if self.need_send_kv(model_input, kv_caches, warmup_mode):
                     get_kv_transfer_group(
-                    ).send_kv_caches_and_hidden_states_hpu(
+                            ).send_kv_caches_and_hidden_states( #TODO: not compatible with mooncake HPU connector
                         # model_executable is used to know which layer the
                         # current worker is working on, so that we can send KV
                         # for only those layers.

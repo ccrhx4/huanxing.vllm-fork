@@ -3811,7 +3811,6 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         **execute_model_kwargs,
                         selected_token_indices=sampling_metadata.
                         selected_token_indices)
-                    print("attn metadata: ", attn_metadata)
                     hidden_states, bypass_model_exec, model_input = \
                     get_kv_transfer_group().recv_kv_caches_and_hidden_states(
                         # model is used to know which layer the current worker
@@ -3821,6 +3820,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         model_input,
                         kv_caches=kv_caches
                     )
+                print("updated model input: ", model_input)
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
                     'real_batch_size': real_batch_size

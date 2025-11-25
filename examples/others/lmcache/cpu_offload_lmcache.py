@@ -69,15 +69,19 @@ def build_llm_with_lmcache(lmcache_connector: str, model: str, vllm_version: str
             kv_transfer_config=ktc,
             max_model_len=8000,
             gpu_memory_utilization=0.8,
+            disable_async_output_proc=True,
             enable_prefix_caching=False,
             enable_chunked_prefill=False,  # Only in v0
         )
-    else:
+    else: # APC path for debug
         llm_args = EngineArgs(
             model=model,
-            kv_transfer_config=ktc,
+            block_size=16,
             max_model_len=8000,
             gpu_memory_utilization=0.8,
+            disable_async_output_proc=True,
+            enable_prefix_caching=True,
+            enable_chunked_prefill=False,  # Only in v0
         )
 
     llm = LLM(**asdict(llm_args))
@@ -122,12 +126,8 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if args.version == "v0":
-        lmcache_connector = "LMCacheConnector"
-        model = "mistralai/Mistral-7B-Instruct-v0.2"
-    else:
-        lmcache_connector = "LMCacheConnectorV1"
-        model = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    lmcache_connector = "LMCacheConnector"
+    model = "mistralai/Mistral-7B-Instruct-v0.2"
 
     setup_environment_variables(args.version)
 

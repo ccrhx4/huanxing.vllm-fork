@@ -3820,7 +3820,6 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         model_input,
                         kv_caches=kv_caches
                     )
-                print("updated model input: ", model_input)
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
                     'real_batch_size': real_batch_size

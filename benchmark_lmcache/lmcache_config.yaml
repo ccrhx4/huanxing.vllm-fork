@@ -1,0 +1,4 @@
+local_cpu: True
+max_local_cpu_size: 80
+max_local_disk_size: 0
+remote_serde: NULL

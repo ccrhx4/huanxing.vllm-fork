@@ -2,7 +2,9 @@
 
 # --- Configuration ---
 MODEL="meta-llama/Llama-3.1-8B-Instruct"
-lmcache_config_file="lmcache_config.yaml"
+#lmcache_config_file="lmcache_config.yaml"
+#lmcache_config_file="lmcache_config_disk.yaml"
+lmcache_config_file="lmcache_config_lm_server.yaml"
 
 if [ "$DEBUG" = "1" ]; then
     # If DEBUG is set, enable DEBUG logging for LMCache.
@@ -11,6 +13,8 @@ if [ "$DEBUG" = "1" ]; then
 else
     export LMCACHE_LOG_LEVEL=INFO
 fi
+
+python3 -m lmcache.experimental.server localhost 65432 &
 
 # --- VLLM Service Execution ---
 export PT_HPU_RECIPE_CACHE_CONFIG='/graph_cache/',True,16384

@@ -1700,7 +1700,13 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         bs = len(seq_group_metadata_list)
         if bs > 1 and self.use_merged_prefill:
             bs = 1
-        max_prompt_len = max(
+        
+        env_max_len_str = os.environ.get("VLLM_PROMPT_NO_PADDING")
+        if env_max_len_str == "1":
+            logger.debug("Do not padding for prompt lens.")
+            max_prompt_len = max(query_lens)
+        else:
+            max_prompt_len = max(
             self.bucketing_manager.find_prompt_bucket(bs, target_query_len,
                                                       ctx)[1], self.block_size)
 

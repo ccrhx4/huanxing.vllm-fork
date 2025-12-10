@@ -47,7 +47,10 @@ def setup_hpu_environment():
     os.environ["VLLM_DELAYED_SAMPLING"] = "0"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_STEP"] = "1"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_MIN"] = "1"
-    os.environ["VLLM_PROMPT_SEQ_BUCKET_MAX"] = "1"
+    os.environ["VLLM_PROMPT_SEQ_BUCKET_MAX"] = "30"
+    os.environ["VLLM_PROMPT_BS_BUCKET_STEP"] = "1"
+    os.environ["VLLM_PROMPT_BS_BUCKET_MIN"] = "1"
+    os.environ["VLLM_PROMPT_BS_BUCKET_MAX"] = "1"
 
 def setup_environment_variables(vllm_version: str):
     # LMCache-related environment variables

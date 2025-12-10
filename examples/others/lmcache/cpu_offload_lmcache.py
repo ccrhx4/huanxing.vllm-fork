@@ -37,7 +37,17 @@ from lmcache.integration.vllm.utils import ENGINE_NAME
 from vllm import LLM, SamplingParams
 from vllm.config import KVTransferConfig
 from vllm.engine.arg_utils import EngineArgs
+from vllm.platforms import current_platform
 
+os.environ["PYTHONHASHSEED"] = "0"
+
+def setup_hpu_environment():
+    # TODO: check if can skip PT_HPU_GPU_MIGRATION=1
+    os.environ["VLLM_SKIP_WARMUP"] = "True"
+    os.environ["VLLM_DELAYED_SAMPLING"] = "0"
+    os.environ["VLLM_PROMPT_SEQ_BUCKET_STEP"] = "1"
+    os.environ["VLLM_PROMPT_SEQ_BUCKET_MIN"] = "1"
+    os.environ["VLLM_PROMPT_SEQ_BUCKET_MAX"] = "1"
 
 def setup_environment_variables(vllm_version: str):
     # LMCache-related environment variables
@@ -131,6 +141,9 @@ def main():
 
     setup_environment_variables(args.version)
 
+    if current_platform.is_hpu():
+        setup_hpu_environment()
+
     with build_llm_with_lmcache(lmcache_connector, model, args.version) as llm:
         # This example script runs two requests with a shared prefix.
         # Define the shared prompt and specific prompts
@@ -142,7 +155,7 @@ def main():
             shared_prompt + "Tell me a very long story",
         ]
 
-        sampling_params = SamplingParams(temperature=0, max_tokens=1)
+        sampling_params = SamplingParams(temperature=0, max_tokens=1, seed=1, stop=None)
 
         # Print the first output
         print_output(llm, first_prompt, sampling_params, "first")

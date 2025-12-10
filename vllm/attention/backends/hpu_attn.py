@@ -515,11 +515,15 @@ class HPUAttentionImpl(AttentionImpl, torch.nn.Module):
 
         batch_size, seq_len, hidden_size = query.shape
         _, seq_len_kv, _ = key.shape
+        
+        logger.debug(f"batch_size, seq_len, hidden_size: {batch_size}, {seq_len}, {hidden_size}")
+        logger.debug(f"seq_len_kv : {seq_len_kv}")
 
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
         slot_mapping = attn_metadata.slot_mapping.flatten(
         ) if attn_metadata.slot_mapping is not None else None
+        logger.debug(f"slot_mapping : {slot_mapping}")
         key_cache = None
         value_cache = None
         if kv_cache is not None and isinstance(kv_cache, tuple):

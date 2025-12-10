@@ -166,7 +166,8 @@ def main():
         time.sleep(1)
 
         # print the second output
-        print_output(llm, second_prompt, sampling_params, "second")
+        # print_output(llm, second_prompt, sampling_params, "second")
+        print_output(llm, first_prompt, sampling_params, "second")
 
 
 if __name__ == "__main__":

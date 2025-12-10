@@ -3826,7 +3826,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                         model_input,
                         kv_caches=kv_caches
                     )
-                    
+                    sampling_metadata = model_input.sampling_metadata
                     # Update execute kwargs from new model input
                     execute_model_kwargs.update({
                         "input_ids":
@@ -3840,6 +3840,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
 
                     seq_len = self._seq_len(model_input.attn_metadata)
 
+                logger.debug(f"{model_input.sampling_metadata}")
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
                     'real_batch_size': real_batch_size

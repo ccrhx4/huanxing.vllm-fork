@@ -158,16 +158,20 @@ def main():
             shared_prompt + "Tell me a very long story",
         ]
 
-        sampling_params = SamplingParams(temperature=0, max_tokens=1, seed=1, stop=None)
+        sampling_params = SamplingParams(temperature=0, max_tokens=20, seed=1, stop=None)
 
         # Print the first output
         print_output(llm, first_prompt, sampling_params, "first")
 
         time.sleep(1)
 
-        # print the second output
+        # first, test the full hit
         # print_output(llm, second_prompt, sampling_params, "second")
-        print_output(llm, first_prompt, sampling_params, "second")
+        print_output(llm, first_prompt, sampling_params, "full_hit")
+        
+        # second, test the prefix hit
+        # print the second output
+        print_output(llm, second_prompt, sampling_params, "second")
 
 
 if __name__ == "__main__":

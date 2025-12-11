@@ -3771,7 +3771,6 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                                     f"graphs{'T' if use_graphs else 'F'}")
             else:
                 model_event_name = 'model_executable'
-            print(model_event_name)
             if num_steps > 1 or use_delayed_sampling:
                 # in case of multi-step scheduling
                 # we only want to pythonize in the last step
@@ -3841,6 +3840,8 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                     seq_len = self._seq_len(model_input.attn_metadata)
 
                 logger.debug(f"{model_input.sampling_metadata}")
+                logger.debug(f"{model_input.input_tokens}")
+                logger.debug(f"{model_input.input_positions}")
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
                     'real_batch_size': real_batch_size

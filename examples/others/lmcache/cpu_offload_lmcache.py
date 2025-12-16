@@ -44,6 +44,7 @@ os.environ["PYTHONHASHSEED"] = "0"
 def setup_hpu_environment():
     # TODO: check if can skip PT_HPU_GPU_MIGRATION=1
     os.environ["VLLM_SKIP_WARMUP"] = "True"
+    os.environ["VLLM_CONTIGUOUS_PA"] = "0"
     os.environ["VLLM_DELAYED_SAMPLING"] = "0"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_STEP"] = "1"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_MIN"] = "1"

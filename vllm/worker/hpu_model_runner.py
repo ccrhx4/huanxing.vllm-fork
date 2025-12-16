@@ -3842,6 +3842,7 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                 logger.debug(f"{model_input.sampling_metadata}")
                 logger.debug(f"{model_input.input_tokens}")
                 logger.debug(f"{model_input.input_positions}")
+                logger.debug(f"{model_input.attn_metadata}")
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
                     'real_batch_size': real_batch_size

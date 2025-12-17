@@ -155,7 +155,7 @@ class Proxy:
             ])(self.custom_create_completion if self.
                custom_create_completion else self.create_completion)
         self.router.post(
-            "/v1/chat/completions",
+            "/v1/chat/prefill/completions",
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.custom_create_chat_completion if self.
@@ -170,6 +170,11 @@ class Proxy:
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.create_completion_decode)
+        self.router.post(
+            "/v1/chat/decode/completions",
+            dependencies=[
+                Depends(self.validate_json_request)
+            ])(self.create_chat_completion_decode)
 
     async def validate_json_request(self, raw_request: Request):
         content_type = raw_request.headers.get("content-type", "").lower()
@@ -360,6 +365,8 @@ class Proxy:
                 all(isinstance(x, int) for x in p) for p in prompt)):
                 # Already tokenized
                 return sum(len(p) for p in prompt)
+            elif all(isinstance(p, dict) and "text" in p for p in prompt):
+                return sum(len(self.tokenizer(p["text"])["input_ids"]) for p in prompt)
             else:
                 logger.error(
                     "Unsupported prompt format: %s / nested types. Value: %r",
@@ -405,6 +412,7 @@ class Proxy:
             if len(self.prefill_instances) > 0:
                 kv_prepare_request = request.copy()
                 kv_prepare_request["max_tokens"] = 1
+                kv_prepare_request["max_completion_tokens"] = 1
 
                 start_time = time.time()
                 prompt = kv_prepare_request.get("prompt")
@@ -450,6 +458,34 @@ class Proxy:
             print("Error occurred in disagg proxy server")
             print(exc_info)
 
+    async def create_chat_completion_decode(self, raw_request: Request):
+        try:
+            request = await raw_request.json()
+
+            prompt = request.get("prompt")
+            total_length = self.get_total_token_length(prompt)
+            decode_instance = self.schedule(self.decode_cycler,
+                                            is_prompt=False,
+                                            request_len=total_length)
+
+            try:
+                generator_d = self.forward_request(
+                    f"http://{decode_instance}/v1/chat/completions", request)
+            except HTTPException as http_exc:
+                self.remove_instance_endpoint("decode", decode_instance)
+                raise http_exc
+            final_generator = self.generator(generator_d,
+                                             self,
+                                             decode_instance,
+                                             req_len=total_length)
+            response = StreamingResponse(final_generator,
+                                         media_type="application/json")
+            return response
+        except Exception:
+            import sys
+            exc_info = sys.exc_info()
+            print(exc_info)
+
     async def create_chat_completion(self, raw_request: Request):
         try:
             request = await raw_request.json()
@@ -457,6 +493,7 @@ class Proxy:
             # add params to request
             kv_prepare_request = request.copy()
             kv_prepare_request["max_tokens"] = 1
+            kv_prepare_request["max_completion_tokens"] = 1
 
             start_time = time.time()
             # prefill stage
@@ -479,39 +516,24 @@ class Proxy:
                         f"http://{prefill_instance}/v1/chat/completions",
                         kv_prepare_request):
                     value += chunk
+                
+                value = value.strip().decode("utf-8").removesuffix(
+                "data: [DONE]").encode("utf-8")
+
+                async def streaming_response(value):
+                    if value:
+                        yield value
+                    else:
+                        yield b""
+                
+                generator_p = streaming_response(value)
+                response = StreamingResponse(generator_p,
+                                         media_type="application/json")
+                response.timeout = None
+                return response
             except HTTPException as http_exc:
                 self.remove_instance_endpoint("prefill", prefill_instance)
                 raise http_exc
-            # Perform kv recv and decoding stage
-            decode_instance = self.schedule(self.decode_cycler,
-                                            is_prompt=False,
-                                            request_len=total_length)
-            value = value.strip().decode("utf-8").removesuffix(
-                "data: [DONE]").encode("utf-8")
-
-            async def streaming_response(value):
-                if value:
-                    yield value
-                else:
-                    yield b""
-
-            generator_p = streaming_response(value)
-            try:
-                generator_d = self.forward_request(
-                    "http://" + decode_instance + "/v1/chat/completions",
-                    request)
-            except HTTPException as http_exc:
-                self.remove_instance_endpoint("decode", decode_instance)
-                raise http_exc
-            final_generator = self.generator(generator_p,
-                                             generator_d,
-                                             self,
-                                             prefill_instance,
-                                             decode_instance,
-                                             req_len=total_length)
-            response = StreamingResponse(final_generator,
-                                         media_type="application/json")
-            return response
         except Exception:
             exc_info = sys.exc_info()
             error_messages = [str(e) for e in exc_info if e]

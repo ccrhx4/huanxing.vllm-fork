@@ -44,7 +44,7 @@ os.environ["PYTHONHASHSEED"] = "0"
 def setup_hpu_environment():
     # TODO: check if can skip PT_HPU_GPU_MIGRATION=1
     os.environ["VLLM_SKIP_WARMUP"] = "True"
-    os.environ["VLLM_CONTIGUOUS_PA"] = "0"
+    os.environ["VLLM_CONTIGUOUS_PA"] = "False"
     os.environ["VLLM_DELAYED_SAMPLING"] = "0"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_STEP"] = "1"
     os.environ["VLLM_PROMPT_SEQ_BUCKET_MIN"] = "1"
@@ -128,6 +128,13 @@ def print_output(
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "-m",
+        "--mla",
+        choices=["0", "1"],
+        default="0",
+        help="Test MLA or not",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         choices=["v0", "v1"],
@@ -142,6 +149,8 @@ def main():
 
     lmcache_connector = "LMCacheConnector"
     model = "mistralai/Mistral-7B-Instruct-v0.2"
+    if args.mla == "1":
+        model = "deepseek-ai/DeepSeek-V2-Lite"
 
     setup_environment_variables(args.version)
 

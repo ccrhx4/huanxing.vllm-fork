@@ -5,6 +5,7 @@ import copy
 import enum
 import hashlib
 import json
+import os
 import sys
 import warnings
 from contextlib import contextmanager
@@ -1687,8 +1688,17 @@ class SchedulerConfig:
             raise ValueError("max_num_prefill_seqs can be only "
                              "used with padding-aware-scheduling. ")
         if self.use_padding_aware_scheduling and self.chunked_prefill_enabled:
-            raise ValueError("Padding-aware scheduling currently "
-                             "does not work with chunked prefill ")
+            if os.getenv("VLLM_PADDING_AWARE_IN_CHUNKED_PREFILL", "false").lower() in ("1", "true") :
+                logger.warning("Padding-aware scheduling with chunked prefill "
+                               "is experimental and may lead to unexpected "
+                               "behaviors.")
+            else:
+                self.use_padding_aware_scheduling = False
+                logger.warning("Disabling padding-aware scheduling since "
+                               "chunked prefill is enabled. To enable "
+                               "padding-aware scheduling with chunked prefill, "
+                               "set the environment variable "
+                               "VLLM_PADDING_AWARE_IN_CHUNKED_PREFILL=true")
 
     @property
     def is_multi_step(self) -> bool:

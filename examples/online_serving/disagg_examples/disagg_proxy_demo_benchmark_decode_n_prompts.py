@@ -155,7 +155,7 @@ class Proxy:
             ])(self.custom_create_completion if self.
                custom_create_completion else self.create_completion)
         self.router.post(
-            "/v1/chat/prefill/completions",
+            "/v1/prefill/chat/completions",
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.custom_create_chat_completion if self.
@@ -171,7 +171,7 @@ class Proxy:
                 Depends(self.validate_json_request)
             ])(self.create_completion_decode)
         self.router.post(
-            "/v1/chat/decode/completions",
+            "/v1/decode/chat/completions",
             dependencies=[
                 Depends(self.validate_json_request)
             ])(self.create_chat_completion_decode)
@@ -412,7 +412,8 @@ class Proxy:
             if len(self.prefill_instances) > 0:
                 kv_prepare_request = request.copy()
                 kv_prepare_request["max_tokens"] = 1
-                kv_prepare_request["max_completion_tokens"] = 1
+                if "max_completion_tokens" in kv_prepare_request:
+                    kv_prepare_request["max_completion_tokens"] = 1
 
                 start_time = time.time()
                 prompt = kv_prepare_request.get("prompt")
@@ -462,8 +463,9 @@ class Proxy:
         try:
             request = await raw_request.json()
 
-            prompt = request.get("prompt")
-            total_length = self.get_total_token_length(prompt)
+            total_length = sum(
+                self.get_total_token_length(msg['content'])
+                for msg in request['messages'])
             decode_instance = self.schedule(self.decode_cycler,
                                             is_prompt=False,
                                             request_len=total_length)
@@ -493,7 +495,8 @@ class Proxy:
             # add params to request
             kv_prepare_request = request.copy()
             kv_prepare_request["max_tokens"] = 1
-            kv_prepare_request["max_completion_tokens"] = 1
+            if "max_completion_tokens" in kv_prepare_request:
+                kv_prepare_request["max_completion_tokens"] = 1
 
             start_time = time.time()
             # prefill stage

@@ -88,9 +88,15 @@ LORA_WARMUP_RANK = 8
 
 VLLM_DELAYED_SAMPLING = os.environ.get('VLLM_DELAYED_SAMPLING',
                                        'false').lower() == 'true'
+VLLM_LMCACHE_ENABLED = os.environ.get('VLLM_HPU_USE_LMCACHE',
+                                        'false').lower() == 'true'
 DUMMY_TOKEN_ID = -1
 HPU_VLLM_SPECDECODE_DUMMY_TOKEN = -2
 _SAMPLING_EPS = 1e-5
+
+
+def is_lmcache_enabled() -> bool:
+    return VLLM_LMCACHE_ENABLED
 
 
 class AsyncD2HMode(IntEnum):
@@ -3172,18 +3178,42 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                             htorch.core.mark_step()
                         return hidden_states, bypass_model_exec
 
-                    model = self.get_model()
-                    if self.use_async_kv_transfer_in_pd:
-                        hidden_states, bypass_model_exec = \
-                            async_recv_kv_caches(model, model_input,
-                                                 attn_metadata, kv_caches)
+                    if not is_lmcache_enabled():
+                        model = self.get_model()
+                        if self.use_async_kv_transfer_in_pd:
+                            hidden_states, bypass_model_exec = \
+                                async_recv_kv_caches(model, model_input,
+                                                    attn_metadata, kv_caches)
+                        else:
+                            cur_time = time.time()
+                            hidden_states, bypass_model_exec = \
+                                sync_recv_kv_caches(model, model_input,
+                                                    attn_metadata, kv_caches)
+                            now = time.time()
+                            logger.info("KV recv time: %s", now - cur_time)
                     else:
-                        cur_time = time.time()
-                        hidden_states, bypass_model_exec = \
-                            sync_recv_kv_caches(model, model_input,
-                                                attn_metadata, kv_caches)
-                        now = time.time()
-                        logger.info("KV recv time: %s", now - cur_time)
+                        hidden_states, bypass_model_exec, model_input = \
+                        get_kv_transfer_group().recv_kv_caches_and_hidden_states(
+                            # model is used to know which layer the current worker
+                            # is working on, so that we can receive KV for
+                            # only those layers.
+                            self.get_model(),
+                            model_input,
+                            kv_caches=kv_caches
+                        )
+                        sampling_metadata = model_input.sampling_metadata
+                        # Update execute kwargs from new model input
+                        execute_model_kwargs.update({
+                            "input_ids":
+                            model_input.input_tokens,
+                            "positions":
+                            model_input.input_positions,
+                            "attn_metadata":
+                            self.trim_attn_metadata(
+                                model_input.attn_metadata)
+                        })
+
+                        seq_len = self._seq_len(model_input.attn_metadata)
 
                 profiler_args = {
                     'real_seq_len': model_input.seq_lens,
@@ -3332,17 +3362,25 @@ class HPUModelRunner(HPUModelRunnerBase[ModelInputForHPUWithSamplingMetadata]):
                             hidden_states_list,
                             event
                         )
-
-                    tp_size = (self.vllm_config.parallel_config.
-                               tensor_parallel_size)
-                    if get_world_group().rank % tp_size == 0:
-                        if self.use_async_kv_transfer_in_pd:
-                            async_send_kv_caches(hidden_states)
-                        else:
-                            cur_time = time.time()
-                            sync_send_kv_caches(hidden_states)
-                            now = time.time()
-                            logger.info("KV send time: %f", now - cur_time)
+                    if not is_lmcache_enabled():
+                        tp_size = (self.vllm_config.parallel_config.
+                                tensor_parallel_size)
+                        if get_world_group().rank % tp_size == 0:
+                            if self.use_async_kv_transfer_in_pd:
+                                async_send_kv_caches(hidden_states)
+                            else:
+                                cur_time = time.time()
+                                sync_send_kv_caches(hidden_states)
+                                now = time.time()
+                                logger.info("KV send time: %f", now - cur_time)
+                    else:
+                        get_kv_transfer_group(
+                            ).send_kv_caches_and_hidden_states(
+                            self.get_model(),
+                            model_input,
+                            kv_caches,
+                            hidden_states,
+                        )
 
                 if self.lora_config:
                     LoraMask.setLoraMask(

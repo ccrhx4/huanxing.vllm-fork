@@ -427,7 +427,7 @@ class HpuModelAdapter:
     def _set_indices_and_offsets(self, metadata, block_size, is_prompt):
         slot_mapping = metadata.slot_mapping.flatten()
         indices = torch.div(slot_mapping, block_size, rounding_mode="floor")
-        if is_prompt:
+        if is_prompt and metadata.block_list is None:
             indices = indices.unflatten(0, (-1, block_size))[:, 0]
             offsets = None
         else:

@@ -67,17 +67,7 @@ class KVTransferAgent:
     def close(self) -> None:
         self.connector.close()
 
-    def recv_kv_caches_and_hidden_states(
-        self, model_executable: torch.nn.Module,
-        model_input: "ModelInputForGPUWithSamplingMetadata",
-        kv_caches: List[torch.Tensor]
-    ) -> Tuple[Union[torch.Tensor, IntermediateTensors], bool,
-               "ModelInputForGPUWithSamplingMetadata"]:
-
-        return self.connector.recv_kv_caches_and_hidden_states(
-            model_executable, model_input, kv_caches)
-
-    def send_kv_caches_and_hidden_states_hpu(
+    def send_kv_caches_and_hidden_states(
         self,
         model_executable: torch.nn.Module,
         model_input: "ModelInputForHPUWithSamplingMetadata",
@@ -85,28 +75,15 @@ class KVTransferAgent:
         hidden_or_intermediate_states: Union[torch.Tensor,
                                              IntermediateTensors],
     ) -> None:
-        self.connector.send_kv_caches_and_hidden_states_hpu(
+        self.connector.send_kv_caches_and_hidden_states(
             model_executable, model_input, kv_caches,
             hidden_or_intermediate_states)
 
-    def send_kv_caches_and_hidden_states_cpu(
-        self,
-        input_tokens_list: List[torch.Tensor],
-        kv_caches_send_list: List[torch.Tensor],
-        hidden_states_list: List[torch.Tensor],
-    ) -> None:
-        self.connector.send_kv_caches_and_hidden_states_cpu(
-            input_tokens_list, kv_caches_send_list, hidden_states_list)
-
-    def recv_kv_caches_and_hidden_states_cpu(
-            self, prefix: str) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.connector.recv_kv_caches_and_hidden_states_cpu(prefix)
-
-    def recv_kv_caches_and_hidden_states_hpu(
+    def recv_kv_caches_and_hidden_states(
         self, model_executable: torch.nn.Module,
         model_input: "ModelInputForHPUWithSamplingMetadata",
-        attn_metadata: object, kv_caches: List[torch.Tensor]
+        kv_caches: List[torch.Tensor]
     ) -> Tuple[Union[torch.Tensor, IntermediateTensors], bool,
                "ModelInputForHPUWithSamplingMetadata"]:
-        return self.connector.recv_kv_caches_and_hidden_states_hpu(
-            model_executable, model_input, attn_metadata, kv_caches)
+        return self.connector.recv_kv_caches_and_hidden_states(
+            model_executable, model_input, kv_caches)

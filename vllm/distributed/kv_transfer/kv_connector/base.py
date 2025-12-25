@@ -124,6 +124,7 @@ class KVConnectorBase(ABC):
 
         raise NotImplementedError
 
+    '''
     @abstractmethod
     def send_kv_caches_and_hidden_states_hpu(
         self,
@@ -157,3 +158,4 @@ class KVConnectorBase(ABC):
     ) -> Tuple[Union[torch.Tensor, IntermediateTensors], bool,
                "ModelInputForHPUWithSamplingMetadata"]:
         raise NotImplementedError
+    '''

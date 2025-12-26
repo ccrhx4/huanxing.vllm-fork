@@ -1033,8 +1033,11 @@ def find_nccl_library() -> str:
         logger.info("Found nccl from library %s", so_file)
     return so_file
 
+# TODO: workaround hpu_mirgration ENV for lmcache
+# remove this import after hpu imgration is no longer needed
+import habana_frameworks.torch as htorch
 
-prev_set_stream = torch.cuda.set_stream
+prev_set_stream = htorch.hpu.set_stream
 
 _current_stream = None
 

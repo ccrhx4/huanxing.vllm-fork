@@ -445,7 +445,7 @@ class EngineArgs:
                             help='Number of tensor parallel replicas.')
         parser.add_argument(
             '--enable-expert-parallel',
-            default=True,
+            default=EngineArgs.enable_expert_parallel,
             help='Use expert parallelism instead of tensor parallelism '
             'for MoE layers.')
         parser.add_argument(

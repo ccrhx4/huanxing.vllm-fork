@@ -489,12 +489,12 @@ class Scheduler:
         self.fetching: Deque[SequenceGroup] = deque()
         self.abort_request_kv_cache_miss = \
             envs.VLLM_ABORT_REQUEST_KV_CACHE_MISS
-        self.fetching_thread = threading.Thread(target=self._fetch_kv_thread, )
-        if self.need_fetch_kv:
-            from vllm_hpu_extension.profiler import HabanaHighLevelProfiler
-            self.scheduler_profiler = HabanaHighLevelProfiler(
-                "scheduler_instance_0")
-            self.fetching_thread.start()
+        # self.fetching_thread = threading.Thread(target=self._fetch_kv_thread, )
+        # if self.need_fetch_kv:
+        #    from vllm_hpu_extension.profiler import HabanaHighLevelProfiler
+        #    self.scheduler_profiler = HabanaHighLevelProfiler(
+        #        "scheduler_instance_0")
+        #    self.fetching_thread.start()
         # Sequence groups in the WAITING state.
         # Contain new prefill or preempted requests.
         self.waiting: Deque[SequenceGroup] = deque()

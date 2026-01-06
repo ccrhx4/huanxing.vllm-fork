@@ -69,9 +69,7 @@ done
 
 # INC FP8 quantization
 if [ "$inc_fp8_quant" = "true" ]; then
-    #export INC_MEASUREMENT_DUMP_PATH_PREFIX=$(realpath "$BASH_DIR/../..")
-    export QUANT_CONFIG=$(realpath "$BASH_DIR/../quant_configs/inc_quant_per_channel_with_fp8kv_config.json")
-    export QUANT_CONFIG="/workspace/workdir/lmcache/vllm-fork/pd_xpyd/inc_fp8_tp8ep8.json"
+    export QUANT_CONFIG=$(realpath "$BASH_DIR/inc_fp8_tp8ep8.json")
     # Set to "fp8_inc" if want to use fp8 kv cache, else set to "auto" to use bf16 kv cache
     KV_CACHE_DTYPE=fp8_inc
     export VLLM_REQUANT_FP8_INC=1
@@ -194,11 +192,16 @@ echo " environments are reset "
 
 env | grep VLLM
 
+# LMCache Env
 export no_proxy=0.0.0.0,localhost,127.0.0.1
 export VLLM_SKIP_WARMUP=true 
 export PT_HPU_GPU_MIGRATION=1
 export VLLM_CONTIGUOUS_PA=False
-prefill_config_file=$PWD/lmcache_config.yaml
+
+prefill_config_file=$PWD/lmcache_config_cpu.yaml
+
+# for mooncake RPC address
+# export MC_TCP_BIND_ADDRESS=localhost
 
 VLLM_HPU_USE_LMCACHE=True \
 LMCACHE_CONFIG_FILE=$prefill_config_file \

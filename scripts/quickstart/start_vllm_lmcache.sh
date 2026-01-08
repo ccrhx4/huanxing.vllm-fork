@@ -30,7 +30,7 @@ vllm_port=8688
 warmup_cache_path=/data/warmup_cache
 max_num_seqs=64
 host=0.0.0.0
-max_model_len=16384
+max_model_len=64000
 max_num_prefill_seqs=1
 
 KV_CACHE_DTYPE=auto
@@ -77,6 +77,20 @@ if [ "$inc_fp8_quant" = "true" ]; then
     export VLLM_MOE_N_SLICE=1
     export VLLM_HPU_MARK_SCALES_AS_CONST=false
     export RUNTIME_SCALE_PATCHING=1
+
+    export INC_APPLY_OOT_PATCH="true"
+    export PT_HPU_SDPA_QKV_SLICE_MODE_FWD=1
+    export VLLM_HPU_FSDPA_SLICE_SEQ_LEN_THLD=16384
+    export PT_HPU_SDPA_BR_FACTOR=4096       # slice size on the query
+    export PT_HPU_SDPA_BC_FACTOR=4096       # siice size on the kv
+    export VLLM_HPU_FSDPA_SLICE_CHUNK_SIZE=4096 # qkv slice size in fp8 FSDPA
+    export VLLM_HPU_FSDPA_SLICE_IMPL="slice_qkv"    # select the fp8 fsdpa impl
+    export VLLM_HPU_FSDPA_SLICE_CAUSAL="true"
+
+    # MoE Slice Optimization to save memory when chunked prefill isn't enabled for long model len(eg,64k)
+    export VLLM_SUPPORT_MOE_SLICE=True
+    export VLLM_MOE_SLICE_LENGTH=8192
+    export VLLM_SUPPORT_MOE_CHUNK="false"
 else
     export VLLM_MOE_N_SLICE=8
 fi
@@ -127,7 +141,7 @@ block_size=128
 if (( max_model_len <= 18432 )); then
 	export VLLM_GPU_MEMORY_UTILIZATION=0.85
 else
-	export VLLM_GPU_MEMORY_UTILIZATION=0.65
+	export VLLM_GPU_MEMORY_UTILIZATION=0.40
 fi
 export VLLM_GRAPH_RESERVED_MEM=0.1
 export VLLM_GRAPH_PROMPT_RATIO=0
@@ -197,6 +211,7 @@ export no_proxy=0.0.0.0,localhost,127.0.0.1
 export VLLM_SKIP_WARMUP=true 
 export PT_HPU_GPU_MIGRATION=1
 export VLLM_CONTIGUOUS_PA=False
+export VLLM_PROMPT_NO_PADDING=1
 
 prefill_config_file=$PWD/lmcache_config_cpu.yaml
 
@@ -226,7 +241,8 @@ python3 -m vllm.entrypoints.openai.api_server --host $host --port $vllm_port \
 --gpu_memory_utilization $VLLM_GPU_MEMORY_UTILIZATION \
 --disable-log-requests \
 --enable-reasoning \
---reasoning-parser deepseek_r1 \
---kv-transfer-config \
-        '{"kv_connector":"LMCacheConnector","kv_role":"kv_both","kv_connector_extra_config": {"discard_partial_chunks": false, "lmcache_rpc_port": "producer1"}}'
+--reasoning-parser deepseek_r1
+
+#--kv-transfer-config \
+#        '{"kv_connector":"LMCacheConnector","kv_role":"kv_both","kv_connector_extra_config": {"discard_partial_chunks": false, "lmcache_rpc_port": "producer1"}}'
 

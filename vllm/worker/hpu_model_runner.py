@@ -1219,9 +1219,13 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
         assert max_query_len > 0
 
-        max_prompt_len = max(
-            self.bucketing_ctx.get_padded_prompt_seq_len(max_query_len),
-            self.block_size)
+        env_max_len_str = os.environ.get("VLLM_PROMPT_NO_PADDING")
+        if env_max_len_str == "1":
+            max_prompt_len = round_up(max_query_len, self.block_size)
+        else:
+            max_prompt_len = max(
+                self.bucketing_ctx.get_padded_prompt_seq_len(max_query_len),
+                self.block_size)
 
         if self.dp_awared_padding and\
             (self.kv_conf is None or self.kv_conf.is_kv_producer):

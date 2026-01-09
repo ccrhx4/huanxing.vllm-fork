@@ -98,7 +98,7 @@ fi
 
 if [ "$warmup_cache_path" != "" ]; then
     echo "HPU recipe cache will be saved to $warmup_cache_path"
-    export PT_HPU_RECIPE_CACHE_CONFIG=${warmup_cache_path},false,16384
+    export PT_HPU_RECIPE_CACHE_CONFIG=${warmup_cache_path},false,163840
     mkdir -p "${warmup_cache_path}"
 fi
 
@@ -131,7 +131,7 @@ export PT_HPU_WEIGHT_SHARING=0
 export HABANA_VISIBLE_MODULES="0,1,2,3,4,5,6,7"
 export PT_HPUGRAPH_DISABLE_TENSOR_CACHE=1
 export PT_HPU_LAZY_MODE=1
-export LMCACHE_LOG_LEVEL=DEBUG
+#export LMCACHE_LOG_LEVEL=DEBUG
 export VLLM_EP_SIZE=8
 
 block_size=128
@@ -241,8 +241,7 @@ python3 -m vllm.entrypoints.openai.api_server --host $host --port $vllm_port \
 --gpu_memory_utilization $VLLM_GPU_MEMORY_UTILIZATION \
 --disable-log-requests \
 --enable-reasoning \
---reasoning-parser deepseek_r1
-
-#--kv-transfer-config \
-#        '{"kv_connector":"LMCacheConnector","kv_role":"kv_both","kv_connector_extra_config": {"discard_partial_chunks": false, "lmcache_rpc_port": "producer1"}}'
+--reasoning-parser deepseek_r1 \
+--kv-transfer-config \
+	'{"kv_connector":"LMCacheConnector","kv_role":"kv_both","kv_connector_extra_config": {"discard_partial_chunks": false, "lmcache_rpc_port": "producer1"}}'
 

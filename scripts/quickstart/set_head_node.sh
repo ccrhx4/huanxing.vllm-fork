@@ -3,9 +3,9 @@
 # set -x
 # parameters to be changed
 # set IP address of header node
-export VLLM_HOST_IP=
+export VLLM_HOST_IP=127.0.0.1
 # set NIC interface name of worker IP address
-export GLOO_SOCKET_IFNAME=
+export GLOO_SOCKET_IFNAME=enp154s0d8
 
 # warmup cache folder
 export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
@@ -25,13 +25,30 @@ source "$BASH_DIR"/utils.sh
 
 # INC FP8 quantization
 export INC_MEASUREMENT_DUMP_PATH_PREFIX=$(realpath "$BASH_DIR/../..")
-export QUANT_CONFIG=$(realpath "$BASH_DIR/../quant_configs/inc_quant_per_channel_bf16kv.json")
+export QUANT_CONFIG=$(realpath "$BASH_DIR/../quant_configs/inc_quant_fp8kv_pts_scalar_fp8_mla.json")
 if [ -n "$QUANT_CONFIG" ]; then
     export VLLM_REQUANT_FP8_INC=1
     export VLLM_ENABLE_RUNTIME_DEQUANT=1
     export VLLM_HPU_MARK_SCALES_AS_CONST=false
     export VLLM_MOE_N_SLICE=1
     export INC_FORCE_NAIVE_SCALING=1
+
+    # Set RUNTIME_SCALE_PATCHING when scale_format equals "scalar" in quant config
+    export RUNTIME_SCALE_PATCHING=1
+
+    # Enable QKV slicing for long prompt
+    export INC_APPLY_OOT_PATCH="true"
+    export PT_HPU_SDPA_QKV_SLICE_MODE_FWD=1
+    export VLLM_HPU_FSDPA_SLICE_SEQ_LEN_THLD=16384
+    export PT_HPU_SDPA_BR_FACTOR=4096       # slice size on the query
+    export PT_HPU_SDPA_BC_FACTOR=4096       # siice size on the kv
+    export VLLM_HPU_FSDPA_SLICE_CHUNK_SIZE=4096 # qkv slice size in fp8 FSDPA
+    export VLLM_HPU_FSDPA_SLICE_IMPL="slice_qkv"    # select the fp8 fsdpa impl
+    export VLLM_HPU_FSDPA_SLICE_CAUSAL="true"
+
+    # Enable MoE slice to reduce memory footprint
+    export VLLM_SUPPORT_MOE_SLICE=True
+    export VLLM_MOE_SLICE_LENGTH=8192
     clean_inc_scale
 else
     export VLLM_MOE_N_SLICE=8

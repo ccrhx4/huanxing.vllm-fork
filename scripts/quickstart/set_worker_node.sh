@@ -21,7 +21,7 @@ source "$BASH_DIR"/utils.sh
 
 # INC FP8 quantization
 export INC_MEASUREMENT_DUMP_PATH_PREFIX=$(realpath "$BASH_DIR/../..")
-export QUANT_CONFIG=$(realpath "$BASH_DIR/../quant_configs/inc_quant_per_channel_with_fp8kv_config.json")
+export QUANT_CONFIG=$(realpath "$BASH_DIR/../quant_configs/inc_quant_per_channel_with_bf16kv.json")
 if [ -n "$QUANT_CONFIG" ]; then
     export VLLM_REQUANT_FP8_INC=1
     export VLLM_ENABLE_RUNTIME_DEQUANT=1

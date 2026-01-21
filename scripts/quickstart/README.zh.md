@@ -3,8 +3,6 @@
 本指南提供了在英特尔® Gaudi® HPU 上使用 vLLM 服务框架部署和运行 DeepseekV3ForCausalLM 架构模型的分步说明。它涵盖了硬件要求、软件先决条件、模型权重下载和转换、环境设置、模型服务部署以及在单节点和多节点 8*Gaudi 服务器上的性能和精度基准测试。
 
 已验证模型：
-- deepseek-ai/DeepSeek-R1-0528
-- deepseek-ai/DeepSeek-R1
 - moonshotai/Kimi-K2-Instruct
 - deepseek-ai/DeepSeek-V3.1
 
@@ -44,9 +42,9 @@
 
 ## 硬件要求
 
-* DeepSeek-R1-0528、DeepSeek-R1 或 DeepSeek-V3.1
+* DeepSeek-V3.1
 
-  * DeepSeek-R1-0528 、 DeepSeek-R1 或 DeepSeek-V3.1 拥有 671B 参数，采用 FP8 精度，约占 642GB 内存。单节点 8*Gaudi2 OAM（总共 768GB 内存）足以容纳模型权重和有限上下文长度（<=32k）所需的 KV 缓存。
+  * DeepSeek-V3.1 拥有 671B 参数，采用 FP8 精度，约占 642GB 内存。单节点 8*Gaudi2 OAM（总共 768GB 内存）足以容纳模型权重和有限上下文长度（<=32k）所需的 KV 缓存。
 
   * 为支持更高的并发性和更长的令牌长度，推荐使用 2 节点 8*Gaudi2 服务器。
 
@@ -58,8 +56,8 @@
 
 | 模型                                       | 服务器         | 每节点 CPU                                           | 每节点加速器           | 每节点 RAM    | 每节点存储                                                                 | 每节点前端网络 <br>（带内管理/存储）                                   | 每节点后端网络 <br>（计算，带 RDMA）                                                                                     |
 | :----------------------------------------- | :------------- | :-------------------------------------------------- | :--------------------- | :------------ | :------------------------------------------------------------------------- | :--------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
-| DeepSeek-R1-0528/DeepSeek-R1/DeepSeek-V3.1 | 1 节点 Gaudi2D | 2\* 第三代或更新代英特尔® 至强® 可扩展处理器          | 8\* HL-225D 96GB OAM   | 最低 1.5TB    | **操作系统:** 至少 480GB SATA/SAS/NVMe SSD, <br> **数据:** 至少 2TB NVMe SSD | 至少 1\* 10GbE/25GbE NIC <br> 或 1\* NVIDIA® 200G BlueField-2 DPU/ConnectX-6 Dx SmartNIC | 不需要                                                                                                                   |
-| DeepSeek-R1-0528/DeepSeek-R1/DeepSeek-V3.1 | 2 节点 Gaudi2D | 2\* 第三代或第四代英特尔® 至强® 可扩展处理器         | 8\* HL-225D 96GB OAM   | 最低 1.5TB    | **操作系统:** 至少 480GB SATA/SAS/NVMe SSD, <br> **数据:** 至少 2TB NVMe SSD | 至少 1\* 10GbE/25GbE NIC <br> 或 1\* NVIDIA® 200G BlueField-2 DPU/ConnectX-6 Dx SmartNIC | 4\* 或 8\* NVIDIA® HDR-200G ConnectX-6 Dx SmartNIC/HCA 或 NDR-400G ConnectX-7 SmartNIC/HCA                                |
+| DeepSeek-V3.1 | 1 节点 Gaudi2D | 2\* 第三代或更新代英特尔® 至强® 可扩展处理器          | 8\* HL-225D 96GB OAM   | 最低 1.5TB    | **操作系统:** 至少 480GB SATA/SAS/NVMe SSD, <br> **数据:** 至少 2TB NVMe SSD | 至少 1\* 10GbE/25GbE NIC <br> 或 1\* NVIDIA® 200G BlueField-2 DPU/ConnectX-6 Dx SmartNIC | 不需要                                                                                                                   |
+| DeepSeek-V3.1 | 2 节点 Gaudi2D | 2\* 第三代或第四代英特尔® 至强® 可扩展处理器         | 8\* HL-225D 96GB OAM   | 最低 1.5TB    | **操作系统:** 至少 480GB SATA/SAS/NVMe SSD, <br> **数据:** 至少 2TB NVMe SSD | 至少 1\* 10GbE/25GbE NIC <br> 或 1\* NVIDIA® 200G BlueField-2 DPU/ConnectX-6 Dx SmartNIC | 4\* 或 8\* NVIDIA® HDR-200G ConnectX-6 Dx SmartNIC/HCA 或 NDR-400G ConnectX-7 SmartNIC/HCA                                |
 | Kimi-K2-Instruct                           | 2 节点 Gaudi2D | 2\* 第三代或第四代英特尔® 至强® 可扩展处理器         | 8\* HL-225D 96GB OAM   | 最低 1.5TB    | **操作系统:** 至少 480GB SATA/SAS/NVMe SSD, <br> **数据:** 至少 2TB NVMe SSD | 至少 1\* 10GbE/25GbE NIC <br> 或 1\* NVIDIA® 200G BlueField-2 DPU/ConnectX-6 Dx SmartNIC | 4\* 或 8\* NVIDIA® HDR-200G ConnectX-6 Dx SmartNIC/HCA 或 NDR-400G ConnectX-7 SmartNIC/HCA                                |
 
 ### 将 CPU 设置为性能模式
@@ -74,41 +72,31 @@ sudo echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_
 
 * 参考 [在 Ubuntu 上安装 Docker Engine](https://docs.docker.com/engine/install/ubuntu/) 在每个节点上安装 Docker。
 
-* 参考 [驱动程序和软件安装](https://docs.habana.ai/en/latest/Installation_Guide/Driver_Installation.html) 在每个节点上安装 Gaudi® 驱动程序和软件栈（>= 1.20.1）。确保安装了 `habanalabs-container-runtime`。
+* 参考 [驱动程序和软件安装](https://docs.habana.ai/en/latest/Installation_Guide/Driver_Installation.html) 在每个节点上安装 Gaudi® 驱动程序和软件栈（>= 1.23.0）。确保安装了 `habanalabs-container-runtime`。
 
-* 参考 [固件升级](https://docs.habana.ai/en/latest/Installation_Guide/Firmware_Upgrade.html) 在每个节点上将 Gaudi® 固件升级到 >=1.20.1 版本。
+* 参考 [固件升级](https://docs.habana.ai/en/latest/Installation_Guide/Firmware_Upgrade.html) 在每个节点上将 Gaudi® 固件升级到 >=1.23.0 版本。
 
 * 参考 [配置容器运行时](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Docker_Installation.html#configure-container-runtime) 在每个节点上配置 `habana` 容器运行时。
 
 ## 模型权重下载与转换
 
 ### 在 Gaudi 服务器上启动 Docker 容器
-假设原始模型权重文件在文件夹 /mnt/disk4 中下载和转换，该文件夹对于 DeepSeek-R1-0528、DeepSeek-R1 或 DeepSeek-V3.1 应至少有 1.5TB 磁盘空间，对于 Kimi-K2-Instruct 应至少有 2TB 磁盘空间。
+假设原始模型权重文件在文件夹 /mnt/disk4 中下载和转换，该文件夹对于 DeepSeek-V3.1 应至少有 1.5TB 磁盘空间，对于 Kimi-K2-Instruct 应至少有 2TB 磁盘空间。
 > [!NOTE]
-> * 确保拉取的 docker 镜像与相应的 Gaudi 驱动程序和操作系统版本对齐。本指南中使用的默认镜像是针对 Gaudi 驱动程序/固件 1.20.1 和 Ubuntu 22.04 的，其他镜像请参考 [使用英特尔(R)Gaudi 容器](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Docker_Installation.html#use-intel-gaudi-containers)。
+> * 确保拉取的 docker 镜像与相应的 Gaudi 驱动程序和操作系统版本对齐。本指南中使用的默认镜像是针对 Gaudi 驱动程序/固件 1.23.0 和 Ubuntu 22.04 的，其他镜像请参考 [使用英特尔(R)Gaudi 容器](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Docker_Installation.html#use-intel-gaudi-containers)。
 
 ```bash
-docker run -it --name deepseek_server --runtime=habana -e HABANA_VISIBLE_DEVICES=all --device=/dev:/dev -v /dev:/dev -v /mnt/disk4:/data -e OMPI_MCA_btl_vader_single_copy_mechanism=none --cap-add=sys_nice --cap-add SYS_PTRACE --cap-add=CAP_IPC_LOCK --ulimit memlock=-1:-1 --net=host --ipc=host vault.habana.ai/gaudi-docker/1.20.1/ubuntu22.04/habanalabs/pytorch-installer-2.6.0:latest
+docker run -it --name deepseek_server --runtime=habana -e HABANA_VISIBLE_DEVICES=all --device=/dev:/dev -v /dev:/dev -v /mnt/disk4:/data -e OMPI_MCA_btl_vader_single_copy_mechanism=none --cap-add=sys_nice --cap-add SYS_PTRACE --cap-add=CAP_IPC_LOCK --ulimit memlock=-1:-1 --net=host --ipc=host vault.habana.ai/gaudi-docker/1.23.0/ubuntu22.04/habanalabs/pytorch-installer-2.9.0:latest
 ```
 
 
 ### 下载原始模型
 
-原始的 DeepSeek-R1 模型可在 [HuggingFace](https://huggingface.co/deepseek-ai/DeepSeek-R1) 和 [ModelScope](https://www.modelscope.cn/deepseek-ai/DeepSeek-R1) 上获取。我们假设模型已下载到文件夹 "/data/hf_models/" 中。
+原始的 DeepSeek-V3.1 模型可在 [HuggingFace](https://huggingface.co/deepseek-ai/DeepSeek-V3.1) 和 [ModelScope](https://modelscope.cn/models/deepseek-ai/DeepSeek-V3.1) 上获取。我们假设模型已下载到文件夹 "/data/hf_models/" 中。
 
 ```bash
 sudo apt install git-lfs
 git-lfs install
-
-# 选项1：从 HuggingFace 下载 DeepSeek-R1
-git clone https://huggingface.co/deepseek-ai/DeepSeek-R1 /data/hf_models/DeepSeek-R1
-# 选项2：从 ModelScope 下载 DeepSeek-R1
-git clone https://www.modelscope.cn/deepseek-ai/DeepSeek-R1 /data/hf_models/DeepSeek-R1
-
-#选项1：从 HuggingFace 下载 DeepSeek-R1-0528
-git clone https://huggingface.co/deepseek-ai/DeepSeek-R1-0528 /data/hf_models/DeepSeek-R1-0528
-#选项2：从 ModelScope 下载 DeepSeek-R1-0528
-git clone https://www.modelscope.cn/deepseek-ai/DeepSeek-R1-0528.git /data/hf_models/DeepSeek-R1-0528
 
 #选项1：从 HuggingFace 下载 Kimi-K2-Instruct
 git clone https://huggingface.co/moonshotai/Kimi-K2-Instruct /data/hf_models/Kimi-K2-Instruct
@@ -123,7 +111,7 @@ git clone https://www.modelscope.cn/deepseek-ai/DeepSeek-V3.1.git /data/hf_model
 
 
 ### 转换模型
-要在 Gaudi2D 上服务 DeepSeek-R1 模型，应使用以下命令在 Gaudi 服务器上转换原始的 HuggingFace FP8 模型权重。我们假设原始模型已下载到 /data/hf_models/DeepSeek-R1 文件夹中，转换后的模型将保存到 /data/hf_models/DeepSeek-R1-G2 文件夹中。请确保新文件夹有足够的磁盘空间（对于 DeepSeek-R1 >650GB）。如果磁盘 I/O 足够快，完成转换大约需要 15 分钟。
+要在 Gaudi2D 上服务 DeepSeek-V3.1 模型，应使用以下命令在 Gaudi 服务器上转换原始的 HuggingFace FP8 模型权重。我们假设原始模型已下载到 /data/hf_models/DeepSeek-V3.1 文件夹中，转换后的模型将保存到 /data/hf_models/DeepSeek-V3.1-G2 文件夹中。请确保新文件夹有足够的磁盘空间（对于 DeepSeek-V3.1 >650GB）。如果磁盘 I/O 足够快，完成转换大约需要 15 分钟。
 
 convert_for_g2.py 的 `-i` 选项指定原始模型权重的路径，`-o` 选项指定输出文件夹。请不要在输入或输出路径的末尾添加 `/`。
 
@@ -132,12 +120,6 @@ git clone -b "deepseek_r1" https://github.com/HabanaAI/vllm-fork.git
 cd vllm-fork
 pip install torch safetensors numpy --extra-index-url https://download.pytorch.org/whl/cpu
 
-# 转换 DeepSeek-R1
-python scripts/convert_for_g2.py -i /data/hf_models/DeepSeek-R1 -o /data/hf_models/DeepSeek-R1-G2
-
-# 转换 DeepSeek-R1-0528
-python scripts/convert_for_g2.py -i /data/hf_models/DeepSeek-R1-0528 -o /data/hf_models/DeepSeek-R1-0528-G2
-
 #转换 Kimi-K2-Instruct
 python scripts/convert_for_g2.py -i /data/hf_models/Kimi-K2-Instruct -o /data/hf_models/Kimi-K2-Instruct-G2
 
@@ -145,11 +127,11 @@ python scripts/convert_for_g2.py -i /data/hf_models/Kimi-K2-Instruct -o /data/hf
 python scripts/convert_for_g2.py -i /data/hf_models/DeepSeek-V3.1 -o /data/hf_models/DeepSeek-V3.1-G2
 ```
 
-当显示以下消息时，转换完成。转换后的模型权重文件保存在您指定的文件夹中，例如 /data/hf_models/DeepSeek-R1-G2，我们将使用此转换后的模型来托管 vLLM 服务。
+当显示以下消息时，转换完成。转换后的模型权重文件保存在您指定的文件夹中，例如 /data/hf_models/DeepSeek-V3.1-G2，我们将使用此转换后的模型来托管 vLLM 服务。
 
 ```bash
 ...
-processing /data/hf_models/DeepSeek-R1/model-00163-of-000163.safetensors
+processing /data/hf_models/DeepSeek-V3.1-G2/model-00163-of-000163.safetensors
 skip model.layers.61.embed_tokens.weight.
 skip model.layers.61.enorm.weight.
 skip model.layers.61.hnorm.weight.
@@ -157,7 +139,7 @@ skip model.layers.61.input_layernorm.weight.
 skip model.layers.61.post_attention_layernorm.weight.
 skip model.layers.61.shared_head.head.weight.
 skip model.layers.61.shared_head.norm.weight.
-saving to /data/hf_models/DeepSeek-R1-G2/model-00163-of-000163.safetensors
+saving to /data/hf_models/DeepSeek-V3.1-G2/model-00163-of-000163.safetensors
 ```
 
 ## 单节点设置与服务部署
@@ -188,20 +170,9 @@ HCCL_COMM_ID=127.0.0.1:5555 python3 run_hccl_demo.py --nranks 8 --node_id 0 --si
 
 ### INC FP8 量化
 
-要在单节点情况下使用 INC FP8 量化运行 DeepSeek-R1，您需要遵循：
+要在单节点情况下使用 INC FP8 量化运行 DeepSeek-V3.1，您需要遵循：
 
-#### 1. 根据目标模型和 tp-size 下载相应的测量文件。
-
-|模型|TP-Size|测量文件|
-|---|---|---|
-|DeepSeek-R1-0528|8|Yi30/ds-r1-0528-default-pile-g2-0529|
-|DeepSeek-R1|8|Yi30/inc-woq-2282samples-514-g2|
-
-例如，如果您想运行 DeepSeek-R1-0528，tp-size 为 8，您可以使用以下命令下载测量文件：
-```bash
-cd vllm-fork
-huggingface-cli download Yi30/ds-r1-0528-default-pile-g2-0529  --local-dir ./scripts/nc_workspace_measure_kvcache
-```
+#### 1. 校准模型
 
 ##### 1.1 校准 DeepSeek-V3.1 模型
 对于 DeepSeek-V3.1，请使用以下命令校准模型。命令完成后，DeepSeek-V3.1 测量文件将在文件夹 "scripts/nc_workspace_measure_kvcache" 中生成。
@@ -260,21 +231,6 @@ user:vllm-fork$ ls -l  ./scripts/nc_workspace_measure_kvcache
 dump_stats_path (来自配置): "scripts/nc_workspace_measure_kvcache/inc_measure_output"
 结果完整路径: "/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache/inc_measure_output_hooks_maxabs_0_8.npz"
 
-
-##### 2.2 手动启动 vllm
-
-如果您想手动启动 vllm 或使用自己的脚本，请设置以下环境变量。
-
-|环境变量名称|INC 是否必需|值|解释|
-|---|---|---|---|
-|INC_MEASUREMENT_DUMP_PATH_PREFIX|是|保存测量统计信息的根目录。|详见上文|
-|QUANT_CONFIG|是|要使用的量化配置文件，位于 `vllm-fork/scripts/quant_configs` 文件夹下|详见上文|
-|VLLM_REQUANT_FP8_INC|是|1|启用使用 INC 对 FP8 权重进行块级缩放的重新量化。|
-|VLLM_ENABLE_RUNTIME_DEQUANT|是|1|启用对 FP8 权重进行块级缩放的运行时反量化。|
-|VLLM_MOE_N_SLICE|是|1|指定 MoE 部分的切片数量。|
-|INC_FORCE_NAIVE_SCALING|是|1|设置为 1 时，INC 将使用朴素缩放，这可以有更好的精度。如果设置为 0，INC 将使用硬件对齐的缩放，这具有更好的性能但精度较差。|
-|VLLM_HPU_MARK_SCALES_AS_CONST|否|false（推荐）或 true|将量化模型的缩放值标记为常量。|
-
 #### 3. 检查 INC 量化是否成功启用
 
 如果 INC 量化成功启用，应在 vllm 服务器日志中观察到 `Preparing model with INC`。
@@ -307,10 +263,8 @@ h  帮助信息
 
 ### 以 TP=8 启动 vLLM 服务
 ```bash
-bash start_vllm.sh -w /data/hf_models/DeepSeek-R1-G2 -q -u 0.0.0.0 -p 8688 -l 16384-c /data/warmup_cache
+bash start_vllm.sh -w /data/hf_models/DeepSeek-V3.1-G2 -q -u 0.0.0.0 -p 8688 -l 16384 -c /data/warmup_cache
 ```
-
-注意：对于 DeepSeek-V3.1，如果客户端使用非思维模式，请删除文件 "start_vllm.sh" 中的参数 "--enable-reasoning --reasoning-parser deepseek_r1"。
 
 首次加载和预热模型需要超过 1 小时。完成后，典型输出如下所示。如果重用预热缓存，预热时间将加快。当出现以下日志时，vLLM 服务器已准备好服务。
 ```bash
@@ -329,7 +283,7 @@ INFO 04-09 00:49:01 launcher.py:31] Route: /openapi.json, Methods: HEAD, GET
 ```bash
 curl http://127.0.0.1:8688/v1/chat/completions \
   -X POST \
-  -d '{"model": "/data/hf_models/DeepSeek-R1-G2", "messages": [{"role": "user", "content": "列出 3 个国家和它们的首都。"}], "max_tokens":128}' \
+  -d '{"model": "/data/hf_models/DeepSeek-V3.1-G2", "messages": [{"role": "user", "content": "列出 3 个国家和它们的首都。"}], "max_tokens":128}' \
   -H 'Content-Type: application/json'
 ```
 
@@ -341,11 +295,11 @@ vLLM on Gaudi 支持多节点服务。本节以 2 节点和 TP16 为例进行环
 
 ### 一致的软件栈
 确保两个节点具有相同的软件栈，包括：
-- 驱动程序：1.20.1（如何更新 Gaudi 驱动程序：https://docs.habana.ai/en/latest/Installation_Guide/Driver_Installation.html）
-- 固件：1.20.1（如何更新 Gaudi 固件：https://docs.habana.ai/en/latest/Installation_Guide/Firmware_Upgrade.html#system-unboxing-main）
-- Docker：vault.habana.ai/gaudi-docker/1.20.1/ubuntu22.04/habanalabs/pytorch-installer-2.6.0:latest
-- 用于 DeepSeek-R1 671B 的 vLLM 分支：https://github.com/HabanaAI/vllm-fork/tree/deepseek_r1
-- 用于 DeepSeek-R1 671B 的 vLLM HPU 扩展：https://github.com/HabanaAI/vllm-hpu-extension/tree/deepseek_r1
+- 驱动程序：1.23.0（如何更新 Gaudi 驱动程序：https://docs.habana.ai/en/latest/Installation_Guide/Driver_Installation.html）
+- 固件：1.23.0（如何更新 Gaudi 固件：https://docs.habana.ai/en/latest/Installation_Guide/Firmware_Upgrade.html#system-unboxing-main）
+- Docker：vault.habana.ai/gaudi-docker/1.23.0/ubuntu22.04/habanalabs/pytorch-installer-2.9.0:latest
+- 用于 DeepSeek-V3.1 671B 的 vLLM 分支：https://github.com/HabanaAI/vllm-fork/tree/deepseek_r1
+- 用于 DeepSeek-V3.1 671B 的 vLLM HPU 扩展：https://github.com/HabanaAI/vllm-hpu-extension/tree/deepseek_r1
 
 ### 网络配置
 - 确保两个节点连接到相同的交换机/路由器。
@@ -359,7 +313,7 @@ vLLM on Gaudi 支持多节点服务。本节以 2 节点和 TP16 为例进行环
 ### 启动 Docker 容器参数
 在两个节点上使用以下命令启动容器。假设转换后的模型权重文件在文件夹 /mnt/disk4 中。请确保映射的模型权重文件夹位于同一路径中。
 ```bash
-docker run -it --runtime=habana -e HABana_VISIBLE_DEVICES=all --device=/dev:/dev -v /dev:/dev -v /mnt/disk4:/data -e OMPI_MCA_btl_vader_single_copy_mechanism=none --cap-add=sys_nice --cap-add SYS_PTRACE --cap-add=CAP_IPC_LOCK --ulimit memlock=-1:-1 --net=host --ipc=host vault.habana.ai/gaudi-docker/1.20.1/ubuntu22.04/habanalabs/pytorch-installer-2.6.0:latest
+docker run -it --runtime=habana -e HABANA_VISIBLE_DEVICES=all --device=/dev:/dev -v /dev:/dev -v /mnt/disk4:/data -e OMPI_MCA_btl_vader_single_copy_mechanism=none --cap-add=sys_nice --cap-add SYS_PTRACE --cap-add=CAP_IPC_LOCK --ulimit memlock=-1:-1 --net=host --ipc=host vault.habana.ai/gaudi-docker/1.23.0/ubuntu22.04/habanalabs/pytorch-installer-2.9.0:latest
 ```
 
 ### HCCL demo 测试
@@ -391,7 +345,7 @@ pip install -e vllm-fork/
 ```
 
 ### 配置多节点脚本
-#### 在 set_head_node_sh 和 set_worker_node_sh 中设置 IP 地址和 NIC 接口名称。
+#### 在 set_head_node.sh 和 set_worker_node.sh 中设置 IP 地址和 NIC 接口名称。
 ```bash
 #设置头节点的 IP 地址
 export VLLM_HOST_IP=192.168.1.101
@@ -399,7 +353,7 @@ export VLLM_HOST_IP=192.168.1.101
 export GLOO_SOCKET_IFNAME=enx6c1ff7012f87
 ```
 
-#### 如果需要，调整环境变量。确保头节点和工作节点具有相同的配置，除了 VLLM_HOST_IP、GLOO_SOCKER_IFNAME 和 HCCL_SOCKET_IFNAME。
+#### 如果需要，调整环境变量。确保头节点和工作节点具有相同的配置，除了 VLLM_HOST_IP、GLOO_SOCKET_IFNAME。
 ```bash
 #预热缓存文件夹
 export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
@@ -412,32 +366,23 @@ export max_num_seqs=512
 
 #### INC FP8 量化
 
-要在多节点情况下使用 INC FP8 量化运行 DeepSeek-R1，您需要遵循：
+要在多节点情况下使用 INC FP8 量化运行 DeepSeek-V3.1，您需要遵循：
 
 ##### 1. 根据目标模型和 tp-size 将相应的测量文件下载到头节点和工作节点。
 
 |模型|TP-Size|测量文件|
 |---|---|---|
-|DeepSeek-R1-0528|16|Yi30/ds-r1-0528-default-pile-g2-ep16-0610|
-|DeepSeek-R1|16|Yi30/ds-r1-default-pile-g2-ep16-0610|
 |Kimi-K2-Instruct|16|Yi30/miki-k2-pile-g2-tp16-2nd-0717|
 
-例如，如果您想运行 DeepSeek-R1-0528，tp-size 为 16，您可以使用以下命令下载测量文件：
+例如，如果您想运行 Kimi-K2-Instruct，tp-size 为 16，您可以使用以下命令下载测量文件：
 ```bash
 cd vllm-fork
-huggingface-cli download Yi30/ds-r1-0528-default-pile-g2-ep16-0610  --local-dir ./scripts/nc_workspace_measure_kvcache
-```
-
-
-对于使用 tp-size 16 运行 DeepSeek-R1-0528 的情况，我们已经下载并将 `Yi30/ds-r1-0528-default-pile-g2-ep16-0610` 的测量文件保存到 `scripts/measure_kvcache/ds-r1-0528-g2-tp16`。您可以复制到目标文件夹：
-```bash
-cd vllm-fork
-cp -r ./scripts/measure_kvcache/ds-r1-0528-g2-tp16 ./scripts/nc_workspace_measure_kvcache
+huggingface-cli download Yi30/miki-k2-pile-g2-tp16-2nd-0717  --local-dir ./scripts/nc_workspace_measure_kvcache
 ```
 
 
 ###### 1.1 根据目标模型校准 DeepSeek-V3.1 模型到头节点和工作节点。
-对于 DeepSeek-V3.1，请使用以下命令校准模型。命令完成后，DeepSeek-V3.1 测量文件将在文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中生成。生成测量文件后，您可以将它们复制到其他工作节点的文件夹 vllm-fork/scripts/nc_workspace_measure_kvcache" 中。
+对于 DeepSeek-V3.1，请使用以下命令校准模型。命令完成后，DeepSeek-V3.1 测量文件将在文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中生成。生成测量文件后，您可以将它们复制到其他工作节点的文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中。
 ```bash
 cd vllm-fork
 bash scripts/run_inc_calib.sh --model /data/hf_models/DeepSeek-V3.1-G2 --wd 16 --nprompts 5000
@@ -492,20 +437,6 @@ user:vllm-fork$ ls -l  ./scripts/nc_workspace_measure_kvcache
 dump_stats_path (来自配置): "scripts/nc_workspace_measure_kvcache/inc_measure_output"
 结果完整路径: "/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache/inc_measure_output_hooks_maxabs_0_16.npz"
 
-###### 2.2 手动启动 vllm
-
-如果您想手动启动 vllm 或使用自己的脚本，请设置以下环境变量。
-
-|环境变量名称|INC 是否必需|值|解释|
-|---|---|---|---|
-|INC_MEASUREMENT_DUMP_PATH_PREFIX|是|保存测量统计信息的根目录。|详见上文|
-|QUANT_CONFIG|是|要使用的量化配置文件，位于 `vllm-fork/scripts/quant_configs` 文件夹下|详见上文|
-|VLLM_REQUANT_FP8_INC|是|1|启用使用 INC 对 FP8 权重进行块级缩放的重新量化。|
-|VLLM_ENABLE_RUNTIME_DEQUANT|是|1|启用对 FP8 权重进行块级缩放的运行时反量化。|
-|VLLM_MOE_N_SLICE|是|1|指定 MoE 部分的切片数量。|
-|INC_FORCE_NAIVE_SCALING|是|1|设置为 1 时，INC 将使用朴素缩放，这可以有更好的精度。如果设置为 0，INC 将使用硬件对齐的缩放，这具有更好的性能但精度较差。|
-|VLLM_HPU_MARK_SCALES_AS_CONST|否|false（推荐）或 true|将量化模型的缩放值标记为常量。|
-
 ##### 3. 检查 INC 量化是否成功启用
 
 如果 INC 量化成功启用，应在 vllm 服务器日志中观察到 `Preparing model with INC`。
@@ -527,7 +458,7 @@ source set_worker_node.sh
 ### 启动 Ray 集群
 
 #### 在头节点上启动 Ray
-ray start --head --node-ip-address=头节点_ip --port=端口
+ray start --head --node-ip-address=头节点_ip --port=端口号
 ```bash
 ray start --head --node-ip-address=192.168.1.101 --port=8850
 ```
@@ -535,7 +466,7 @@ ray start --head --node-ip-address=192.168.1.101 --port=8850
 
 #### 在工作节点上启动 Ray
 
-ray start --address='头节点_IP:端口'
+ray start --address='头节点_IP:端口号'
 ```bash
 ray start --address='192.168.1.101:8850'
 ```
@@ -554,7 +485,7 @@ source /etc/environment
 python -m vllm.entrypoints.openai.api_server \
     --host 192.168.1.101 \
     --port 8688 \
-    --model /data/hf_models/DeepSeek-R1-G2 \
+    --model /data/hf_models/DeepSeek-V3.1-G2 \
     --tensor-parallel-size 16 \
     --max-num-seqs $max_num_seqs \
     --max-num-batched-tokens $max_num_batched_tokens \
@@ -567,9 +498,7 @@ python -m vllm.entrypoints.openai.api_server \
     --max-model-len $max_num_batched_tokens \
     --distributed-executor-backend ray \
     --gpu-memory-utilization $VLLM_GPU_MEMORY_UTILIZATION \
-    --trust-remote-code \
-    --enable-reasoning \
-    --reasoning-parser deepseek_r1
+    --trust-remote-code
 ```
 
 ## 检查 vLLM 性能
@@ -578,7 +507,7 @@ python -m vllm.entrypoints.openai.api_server \
 - 请将 benchmark_vllm_client.sh 复制到文件夹 "vllm-fork/benchmarks" 中。
 - 如果需要，在脚本文件中更新模型路径、vLLM 服务器 IP 和端口。
 ```bash
-model_path=/data/hf_models/DeepSeek-R1-G2
+model_path=/data/hf_models/DeepSeek-V3.1-G2
 ip_addr=127.0.0.1
 port=8688
 ```
@@ -606,26 +535,11 @@ export no_proxy=127.0.0.1
 ### 运行 lm_eval
 如果需要，更改以下命令中的模型路径、vLLM IP 地址或端口。
 ```bash
-lm_eval --model local-completions --tasks gsm8k --model_args model=/data/hf_models/DeepSeek-R1-G2,max_gen_toks=4096,max_length=16384,base_url=http://127.0.0.1:8688/v1/completions --batch_size 16 --log_samples --output_path ./lm_eval_output
+lm_eval --model local-completions --tasks gsm8k --model_args model=/data/hf_models/DeepSeek-V3.1-G2,max_gen_toks=4096,max_length=16384,base_url=http://127.0.0.1:8688/v1/completions --batch_size 16 --log_samples --output_path ./lm_eval_output
 ```
 
 ## 工具调用功能
 vLLM 支持调用用户定义的函数（Tool Calling）。
-
-工具调用功能与推理输出（Reasoning Outputs）不兼容。启用工具调用功能时，请务必从启动命令中**移除**推理相关参数（--enable-reasoning --reasoning-parser deepseek_r1），并**添加**下方各模型所需的特定参数。
-
-### DeepSeek-V3 系列模型 (`deepseek_v3`)
-支持的模型：
-
-* `deepseek-ai/DeepSeek-V3-0324` (使用 [examples/tool_chat_template_deepseekv3.jinja](../../examples/tool_chat_template_deepseekv3.jinja))
-* `deepseek-ai/DeepSeek-R1-0528` (使用 [examples/tool_chat_template_deepseekr1.jinja](../../examples/tool_chat_template_deepseekr1.jinja))
-
-```bash
-vllm serve ... 
-    --enable-auto-tool-choice \
-    --tool-call-parser deepseek_v3 \
-    --chat-template <上述对应的模板路径>
-```
 
 ### DeepSeek-V3.1 系列模型 (`deepseek_v31`)
 支持的模型：

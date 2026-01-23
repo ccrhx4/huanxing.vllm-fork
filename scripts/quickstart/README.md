@@ -324,19 +324,44 @@ export max_num_seqs=512
 ```
 
 #### INC FP8 Quantization (multi-node)
-To run DeepSeek-R1 with INC FP8 quantization in multi-nodes case, you need to follow:
+To run DeepSeek-V3.1 with INC FP8 quantization in multi-nodes case, you need to follow:
 
-##### 1. Download corresponding measurement files to both head and worker node according to target model and tp-size.
+##### 1 Calibrate DeepSeek-V3.1 on multi-node.
+For DeepSeek-V3.1, please use the command below to calibrate the model. After the command is done, the DeepSeek-V3.1 measurement files are generated in the folder "vllm-fork/scripts/nc_workspace_measure_kvcache". After the measure files are generated, you may copy them to the folder vllm-fork/scripts/nc_workspace_measure_kvcache" of other worker nodes.
+
+For Kimi-K2-Instruct, its calibration requires two HPU nodes by default. Please also follows the instructions below.
+
+- Start Ray on head node.
 ```bash
-cd vllm-fork
-huggingface-cli download Yi30/miki-k2-pile-g2-tp16-2nd-0717 --local-dir ./scripts/nc_workspace_measure_kvcache
+HABANA_VISIBLE_MODULES='0,1,2,3,4,5,6,7'  \
+PT_HPU_WEIGHT_SHARING=0 \
+PT_HPUGRAPH_DISABLE_TENSOR_CACHE=1 \
+PT_HPU_ENABLE_LAZY_COLLECTIVES="true" \
+VLLM_RAY_DISABLE_LOG_TO_DRIVER="1" \
+RAY_IGNORE_UNHANDLED_ERRORS="1" \
+ray start --head --resources='{"HPU": 8, "TPU": 0}'
 ```
 
-###### 1.1 Calibrate DeepSeek-V3.1 model to both head and worker node according to target model.
-For DeepSeek-V3.1, please use the command below to calibrate the model. After the command is done, the DeepSeek-V3.1 measurement files are generated in the folder "vllm-fork/scripts/nc_workspace_measure_kvcache". After the measure files are generated, you may copy them to the folder vllm-fork/scripts/nc_workspace_measure_kvcache" of other worker nodes.
+- Start Ray on worker node.
+```bash
+HABANA_VISIBLE_MODULES='0,1,2,3,4,5,6,7'  \
+PT_HPU_WEIGHT_SHARING=0 \
+PT_HPUGRAPH_DISABLE_TENSOR_CACHE=1 \
+PT_HPU_ENABLE_LAZY_COLLECTIVES="true" \
+VLLM_RAY_DISABLE_LOG_TO_DRIVER="1" \
+RAY_IGNORE_UNHANDLED_ERRORS="1" \
+ray start --address='${head_ip}:6379' --resources='{"HPU": 8, "TPU": 0}'
+```
+
+- Start calibration on head node.
 ```bash
 cd vllm-fork
-bash scripts/run_inc_calib.sh --model /data/hf_models/DeepSeek-V3.1-G2 --wd 16 --nprompts 5000
+bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 --nprompts 5000
+```
+
+- Copy the calibration output to other node.
+```bash
+scp -r scripts/nc_workspace_measure_kvcache $worker_node:/vllm-fork/scripts
 ```
 
 ##### 2. Configure environment variables.

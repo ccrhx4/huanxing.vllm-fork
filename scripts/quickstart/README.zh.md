@@ -183,7 +183,7 @@ bash scripts/run_inc_calib.sh --model /data/hf_models/DeepSeek-V3.1-G2 --nprompt
 
 #### 2. 配置环境变量（可选）
 
-下载测量文件后，您需要配置一些环境变量以使 INC 量化生效。
+测量文件制作完成后，您需要配置一些环境变量以使 INC 量化生效。
 
 ##### 2.1 使用 start_vllm.sh 脚本
 
@@ -368,30 +368,47 @@ export max_num_seqs=512
 
 要在多节点情况下使用 INC FP8 量化运行 DeepSeek-V3.1，您需要遵循：
 
-##### 1. 根据目标模型和 tp-size 将相应的测量文件下载到头节点和工作节点。
-
-|模型|TP-Size|测量文件|
-|---|---|---|
-|Kimi-K2-Instruct|16|Yi30/miki-k2-pile-g2-tp16-2nd-0717|
-
-例如，如果您想运行 Kimi-K2-Instruct，tp-size 为 16，您可以使用以下命令下载测量文件：
-```bash
-cd vllm-fork
-huggingface-cli download Yi30/miki-k2-pile-g2-tp16-2nd-0717  --local-dir ./scripts/nc_workspace_measure_kvcache
-```
-
-
 ###### 1.1 根据目标模型校准 DeepSeek-V3.1 模型到头节点和工作节点。
 对于 DeepSeek-V3.1，请使用以下命令校准模型。命令完成后，DeepSeek-V3.1 测量文件将在文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中生成。生成测量文件后，您可以将它们复制到其他工作节点的文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中。
+
+Kimi-K2-Instruct 模型至少需要两台机器，也可以参照如下步骤。
+
+- 在头节点上运行如下命令，启动Ray服务
 ```bash
-cd vllm-fork
-bash scripts/run_inc_calib.sh --model /data/hf_models/DeepSeek-V3.1-G2 --wd 16 --nprompts 5000
+HABANA_VISIBLE_MODULES='0,1,2,3,4,5,6,7'  \
+PT_HPU_WEIGHT_SHARING=0 \
+PT_HPUGRAPH_DISABLE_TENSOR_CACHE=1 \
+PT_HPU_ENABLE_LAZY_COLLECTIVES="true" \
+VLLM_RAY_DISABLE_LOG_TO_DRIVER="1" \
+RAY_IGNORE_UNHANDLED_ERRORS="1" \
+ray start --head --resources='{"HPU": 8, "TPU": 0}'
 ```
 
+- 在第二节点上配置头节点IP，并启动Ray服务
+```bash
+HABANA_VISIBLE_MODULES='0,1,2,3,4,5,6,7'  \
+PT_HPU_WEIGHT_SHARING=0 \
+PT_HPUGRAPH_DISABLE_TENSOR_CACHE=1 \
+PT_HPU_ENABLE_LAZY_COLLECTIVES="true" \
+VLLM_RAY_DISABLE_LOG_TO_DRIVER="1" \
+RAY_IGNORE_UNHANDLED_ERRORS="1" \
+ray start --address='${head_ip}:6379' --resources='{"HPU": 8, "TPU": 0}'
+```
+
+- 在头节点上启动校准命令
+```bash
+cd vllm-fork
+bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 --nprompts 5000
+```
+
+- 复制测量文件夹到其他节点同样位置
+```bash
+scp -r scripts/nc_workspace_measure_kvcache $worker_node:/vllm-fork/scripts
+```
 
 ##### 2. 配置环境变量。
 
-下载测量文件后，您需要配置一些环境变量以使 INC 量化生效。
+测量文件制作完成后，您需要配置一些环境变量以使 INC 量化生效。
 
 ###### 2.1 使用 set_head_node.sh & set_worker_node.sh 脚本
 

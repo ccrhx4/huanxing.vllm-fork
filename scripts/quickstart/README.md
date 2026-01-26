@@ -29,6 +29,7 @@ Verified models:
     - [Start Docker Containers](#start-docker-containers)
     - [HCCL Demo Test](#hccl-demo-test-1)
     - [Install vLLM on Both Nodes](#install-vllm-on-both-nodes)
+    - [INC FP8 Quantization](#inc-fp8-quantization-multi-node)
     - [Configure Multi-Node Scripts](#configure-multi-node-scripts)
     - [Start the Ray Cluster](#start-the-ray-cluster)
     - [Start vLLM on the Head Node](#start-vllm-on-the-head-node)
@@ -43,7 +44,7 @@ Verified models:
 ## Hardware Requirements
 
 * DeepSeek-V3.1
-  * 671B parameters, FP8, about 642GB memory. A single 8*Gaudi2 OAM node (768GB total) fits weights plus KV cache for limited context (<=32k).
+  * 685B parameters, FP8, about 642GB memory. A single 8*Gaudi2 OAM node (768GB total) fits weights plus KV cache for limited context (<=32k).
   * For higher concurrency or longer sequences, use 2 nodes with 8*Gaudi2.
 
 * Kimi-K2-Instruct
@@ -310,24 +311,11 @@ git clone -b "deepseek_r1" https://github.com/HabanaAI/vllm-fork.git
 pip install -e vllm-fork/
 ```
 
-### Configure Multi-Node Scripts
-Set IP and NIC in set_head_node.sh / set_worker_node.sh:
-```bash
-export VLLM_HOST_IP=192.168.1.101
-export GLOO_SOCKET_IFNAME=enx6c1ff7012f87
-```
-Adjust shared env vars (head and workers identical except for VLLM_HOST_IP/GLOO_SOCKET_IFNAME values):
-```bash
-export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
-export max_num_batched_tokens=32768
-export max_num_seqs=512
-```
-
-#### INC FP8 Quantization (multi-node)
+### INC FP8 Quantization (multi-node)
 To run DeepSeek-V3.1 with INC FP8 quantization in multi-nodes case, you need to follow:
 
-##### 1. Calibrate DeepSeek-V3.1 on multi-node.
-For DeepSeek-V3.1, please use the command below to calibrate the model. After the command is done, the DeepSeek-V3.1 measurement files are generated in the folder "vllm-fork/scripts/nc_workspace_measure_kvcache". After the measure files are generated, you may copy them to the folder vllm-fork/scripts/nc_workspace_measure_kvcache" of other worker nodes.
+#### 1. Calibrate DeepSeek-V3.1 on multi-node.
+When running DeepSeek-V3.1 on multi-node, it is required to calibrate the model in the same configuation. Please follow steps below to generate the measurement files for TP16.
 
 For Kimi-K2-Instruct, its calibration requires two HPU nodes by default. Please also follows the instructions below.
 
@@ -360,6 +348,7 @@ bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 -
 ```
 
 - Copy the calibration output to other node.
+
 Check the caliration files on head node and worker node:
 ```bash
 ls ./scripts/nc_workspace_measure_kvcache #head node
@@ -374,22 +363,22 @@ ls ./scripts/nc_workspace_measure_kvcache #head node
 
 ```bash
 ls ./scripts/nc_workspace_measure_kvcache #worker node
--rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.json
--rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.npz
--rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16_mod_list.json
+-rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16_mod_list.json
 ...
--rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.json
--rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.npz
--rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16_mod_list.json
+-rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16_mod_list.json
 ```
 
 It is recommanded to copy and combine the calibrations from head node and worker node altoghter. In the runtime, different rank will look for calibration files for its rank.
 
-##### 2. Configure environment variables.
+#### 2. Configure environment variables.
 
-After downloading measurement files, you need to configure some environment variables to make INC quantization become effective.
+After measurement files are ready, you need to configure some environment variables to make INC quantization become effective.
 
-###### 2.1 Using set_head_node.sh & set_worker_node.sh scripts
+##### 2.1 Using set_head_node.sh & set_worker_node.sh scripts
 
 If you are using `set_head_node.sh` and `set_worker_node.sh` scripts to start vllm, please configure `QUANT_CONFIG` and `INC_MEASUREMENT_DUMP_PATH_PREFIX` env var in them.
 
@@ -430,7 +419,20 @@ dump_stats_path (from config): "scripts/nc_workspace_measure_kvcache/inc_measure
 Resulting full path: "/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache/inc_measure_output_hooks_maxabs_0_16.npz"
 ```
 
-3) Apply configuration
+### Configure Multi-Node Scripts
+- Set IP and NIC in set_head_node.sh / set_worker_node.sh:
+```bash
+export VLLM_HOST_IP=192.168.1.101
+export GLOO_SOCKET_IFNAME=enx6c1ff7012f87
+```
+- Adjust shared env vars (head and workers identical except for VLLM_HOST_IP/GLOO_SOCKET_IFNAME values):
+```bash
+export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
+export max_num_batched_tokens=32768
+export max_num_seqs=512
+```
+
+- Apply configuration
 ```bash
 source set_head_node.sh   # on head
 source set_worker_node.sh # on workers

@@ -29,6 +29,7 @@
     - [启动 Docker 容器参数](#启动-docker-容器参数)
     - [HCCL demo 测试](#hccl-demo-测试-1)
     - [在两个节点上安装 vLLM](#在两个节点上安装-vllm)
+    - [INC FP8 量化](#inc-fp8-量化-多节点)
     - [配置多节点脚本](#配置多节点脚本)
     - [启动 Ray 集群](#启动-ray-集群)
     - [在头节点上启动 vLLM](#在头节点上启动-vllm)
@@ -44,7 +45,7 @@
 
 * DeepSeek-V3.1
 
-  * DeepSeek-V3.1 拥有 671B 参数，采用 FP8 精度，约占 642GB 内存。单节点 8*Gaudi2 OAM（总共 768GB 内存）足以容纳模型权重和有限上下文长度（<=32k）所需的 KV 缓存。
+  * DeepSeek-V3.1 拥有 685B 参数，采用 FP8 精度，约占 642GB 内存。单节点 8*Gaudi2 OAM（总共 768GB 内存）足以容纳模型权重和有限上下文长度（<=32k）所需的 KV 缓存。
 
   * 为支持更高的并发性和更长的令牌长度，推荐使用 2 节点 8*Gaudi2 服务器。
 
@@ -344,34 +345,14 @@ git clone -b "deepseek_r1" https://github.com/HabanaAI/vllm-fork.git
 pip install -e vllm-fork/
 ```
 
-### 配置多节点脚本
-#### 在 set_head_node.sh 和 set_worker_node.sh 中设置 IP 地址和 NIC 接口名称。
-```bash
-#设置头节点的 IP 地址
-export VLLM_HOST_IP=192.168.1.101
-#设置头节点 IP 地址的 NIC 接口名称
-export GLOO_SOCKET_IFNAME=enx6c1ff7012f87
-```
-
-#### 如果需要，调整环境变量。确保头节点和工作节点具有相同的配置，除了 VLLM_HOST_IP、GLOO_SOCKET_IFNAME。
-```bash
-#预热缓存文件夹
-export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
-
-# vllm 参数
-export max_num_batched_tokens=32768
-export max_num_seqs=512
-```
-
-
-#### INC FP8 量化
+### INC FP8 量化 （多节点）
 
 要在多节点情况下使用 INC FP8 量化运行 DeepSeek-V3.1，您需要遵循：
 
-###### 1.1 根据目标模型校准 DeepSeek-V3.1 模型到头节点和工作节点。
-对于 DeepSeek-V3.1，请使用以下命令校准模型。命令完成后，DeepSeek-V3.1 测量文件将在文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中生成。生成测量文件后，您可以将它们复制到其他工作节点的文件夹 "vllm-fork/scripts/nc_workspace_measure_kvcache" 中。
+#### 1. 在两个节点上校准 DeepSeek-V3.1 模型
+对于 DeepSeek-V3.1，如果运行在多节点上，需要在多节点上对模型进行校准。以下步骤，适用于TP16的情况。
 
-Kimi-K2-Instruct 模型至少需要两台机器，也可以参照如下步骤。
+Kimi-K2-Instruct 模型校准至少需要两台8卡HPU机器，也可以参照如下步骤。
 
 - 在头节点上运行如下命令，启动Ray服务
 ```bash
@@ -384,7 +365,7 @@ RAY_IGNORE_UNHANDLED_ERRORS="1" \
 ray start --head --resources='{"HPU": 8, "TPU": 0}'
 ```
 
-- 在第二节点上配置头节点IP，并启动Ray服务
+- 在另一节点上配置头节点IP，并启动Ray服务
 ```bash
 HABANA_VISIBLE_MODULES='0,1,2,3,4,5,6,7'  \
 PT_HPU_WEIGHT_SHARING=0 \
@@ -402,7 +383,8 @@ bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 -
 ```
 
 - 复制测量文件夹到其他节点同样位置
-检查校准产生的文件。头节点产生Rank0到Rank7的校准文件，第二节点产生Rank8到Rank15的结果。
+
+校准完成之后，请检查校准产生的文件。头节点产生Rank0到Rank7的校准文件，第二节点产生Rank8到Rank15的校准文件。
 ```bash
 ls ./scripts/nc_workspace_measure_kvcache #head node
 -rw-r--r-- 1 root root 1616977 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16.json
@@ -416,22 +398,22 @@ ls ./scripts/nc_workspace_measure_kvcache #head node
 
 ```bash
 ls ./scripts/nc_workspace_measure_kvcache #worker node
--rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.json
--rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.npz
--rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16_mod_list.json
+-rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_8_16_mod_list.json
 ...
--rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.json
--rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.npz
--rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16_mod_list.json
+-rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_15_16_mod_list.json
 ```
 
 推荐把两台机器产生的校准文件都复制到目标运行的机器。在运行时每个Rank会加载相应Rank的校准文件。
 
-##### 2. 配置环境变量。
+#### 2. 配置环境变量
 
 测量文件制作完成后，您需要配置一些环境变量以使 INC 量化生效。
 
-###### 2.1 使用 set_head_node.sh & set_worker_node.sh 脚本
+##### 2.1 使用 set_head_node.sh & set_worker_node.sh 脚本
 
 如果您使用 `set_head_node.sh` 和 `set_worker_node.sh` 脚本启动 vllm，请在它们中配置 `QUANT_CONFIG` 和 `INC_MEASUREMENT_DUMP_PATH_PREFIX` 环境变量。
 
@@ -457,7 +439,7 @@ export QUANT_CONFIG=/path/to/vllm-fork/scripts/quant_configs/inc_quant_per_chann
 环境变量 `INC_MEASUREMENT_DUMP_PATH_PREFIX` 指定保存测量统计信息的根目录。
 最终路径是通过将此根目录与由 `QUANT_CONFIG` 环境变量指定的量化 JSON 文件中定义的 `dump_stats_path` 连接起来构建的。
 
-如果我们将测量下载到 `/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache`，我们会得到以下文件：
+默认测量统计信息文件位于 `/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache`：
 
 ```bash
 user:vllm-fork$ pwd
@@ -468,16 +450,32 @@ user:vllm-fork$ ls -l  ./scripts/nc_workspace_measure_kvcache
 -rw-r--r-- 1 root root     155379 Jul  4 13:30 inc_measure_output_hooks_maxabs_0_16_mod_list.json
 ```
 
-
-然后，我们导出 `INC_MEASUREMENT_DUMP_PATH_PREFIX=/path/to/vllm-fork`，INC 将解析完整路径如下：
-
-
+然后，我们设置 `INC_MEASUREMENT_DUMP_PATH_PREFIX=/path/to/vllm-fork`，INC 将解析完整路径如下：
 dump_stats_path (来自配置): "scripts/nc_workspace_measure_kvcache/inc_measure_output"
 结果完整路径: "/path/to/vllm-fork/scripts/nc_workspace_measure_kvcache/inc_measure_output_hooks_maxabs_0_16.npz"
 
-##### 3. 检查 INC 量化是否成功启用
+#### 3. 检查 INC 量化是否成功启用
 
-如果 INC 量化成功启用，应在 vllm 服务器日志中观察到 `Preparing model with INC`。
+如果 INC 量化成功启用，应在 vllm 启动服务器日志中观察到 `Preparing model with INC`。
+
+### 配置多节点脚本
+#### 在 set_head_node.sh 和 set_worker_node.sh 中设置 IP 地址和 NIC 接口名称。
+```bash
+#设置头节点的 IP 地址
+export VLLM_HOST_IP=192.168.1.101
+#设置头节点 IP 地址的 NIC 接口名称
+export GLOO_SOCKET_IFNAME=enx6c1ff7012f87
+```
+
+#### 如果需要，调整环境变量。确保头节点和工作节点具有相同的配置，除了 VLLM_HOST_IP、GLOO_SOCKET_IFNAME。
+```bash
+#预热缓存文件夹
+export PT_HPU_RECIPE_CACHE_CONFIG=/data/cache/cache_32k,false,32768
+
+# vllm 参数
+export max_num_batched_tokens=32768
+export max_num_seqs=512
+```
 
 #### 在两个节点上应用配置
 在头节点和工作节点上运行以下命令：

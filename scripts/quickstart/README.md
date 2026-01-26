@@ -326,7 +326,7 @@ export max_num_seqs=512
 #### INC FP8 Quantization (multi-node)
 To run DeepSeek-V3.1 with INC FP8 quantization in multi-nodes case, you need to follow:
 
-##### 1 Calibrate DeepSeek-V3.1 on multi-node.
+##### 1. Calibrate DeepSeek-V3.1 on multi-node.
 For DeepSeek-V3.1, please use the command below to calibrate the model. After the command is done, the DeepSeek-V3.1 measurement files are generated in the folder "vllm-fork/scripts/nc_workspace_measure_kvcache". After the measure files are generated, you may copy them to the folder vllm-fork/scripts/nc_workspace_measure_kvcache" of other worker nodes.
 
 For Kimi-K2-Instruct, its calibration requires two HPU nodes by default. Please also follows the instructions below.
@@ -360,9 +360,30 @@ bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 -
 ```
 
 - Copy the calibration output to other node.
+Check the caliration files on head node and worker node:
 ```bash
-scp -r scripts/nc_workspace_measure_kvcache $worker_node:/vllm-fork/scripts
+ls ./scripts/nc_workspace_measure_kvcache #head node
+-rw-r--r-- 1 root root 1616977 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16_mod_list.json
+...
+-rw-r--r-- 1 root root 1616883 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16_mod_list.json
 ```
+
+```bash
+ls ./scripts/nc_workspace_measure_kvcache #worker node
+-rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16_mod_list.json
+...
+-rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16_mod_list.json
+```
+
+It is recommanded to copy and combine the calibrations from head node and worker node altoghter. In the runtime, different rank will look for calibration files for its rank.
 
 ##### 2. Configure environment variables.
 

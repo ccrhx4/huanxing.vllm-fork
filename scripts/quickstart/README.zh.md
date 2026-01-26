@@ -402,9 +402,30 @@ bash scripts/run_inc_calib.sh --wd 16 --model /data/hf_models/DeepSeek-V3.1-G2 -
 ```
 
 - 复制测量文件夹到其他节点同样位置
+检查校准产生的文件。头节点产生Rank0到Rank7的校准文件，第二节点产生Rank8到Rank15的结果。
 ```bash
-scp -r scripts/nc_workspace_measure_kvcache $worker_node:/vllm-fork/scripts
+ls ./scripts/nc_workspace_measure_kvcache #head node
+-rw-r--r-- 1 root root 1616977 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 12:04 inc_measure_output_hooks_maxabs_0_16_mod_list.json
+...
+-rw-r--r-- 1 root root 1616883 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 12:04 inc_measure_output_hooks_maxabs_7_16_mod_list.json
 ```
+
+```bash
+ls ./scripts/nc_workspace_measure_kvcache #worker node
+-rw-r--r-- 1 root root 1617266 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_10_16_mod_list.json
+...
+-rw-r--r-- 1 root root 1617084 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.json
+-rw-r--r-- 1 root root  866890 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16.npz
+-rw-r--r-- 1 root root  206353 Jan 23 11:59 inc_measure_output_hooks_maxabs_9_16_mod_list.json
+```
+
+推荐把两台机器产生的校准文件都复制到目标运行的机器。在运行时每个Rank会加载相应Rank的校准文件。
 
 ##### 2. 配置环境变量。
 

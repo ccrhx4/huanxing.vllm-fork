@@ -315,9 +315,9 @@ pip install -e vllm-fork/
 To run DeepSeek-V3.1 with INC FP8 quantization in multi-nodes case, you need to follow:
 
 #### 1. Calibrate DeepSeek-V3.1 on multi-node.
-When running DeepSeek-V3.1 on multi-node, it is required to calibrate the model in the same configuation. Please follow steps below to generate the measurement files for TP16.
+To deploy DeepSeek-V3.1 with multi-node tensor parallelism (e.g. TP16), you must calibrate the model using the same multi-node configuration. Follow the steps below to generate the measurement files.
 
-For Kimi-K2-Instruct, its calibration requires two HPU nodes by default. Please also follows the instructions below.
+> **Note:** Kimi-K2-Instruct calibration by default requires two HPU nodes. Follow the same instructions below, updating the model name and path as needed.
 
 - Start Ray on head node.
 ```bash

@@ -22,6 +22,7 @@ from vllm.logger import init_logger
 from vllm.model_executor.layers.attention import Attention
 from vllm.model_executor.layers.fused_moe import FusedMoEFactory
 from vllm.model_executor.layers.fused_qk_norm_rope import fused_qk_rmsnorm_rope_gate
+from vllm.model_executor.layers.fusion.rms_norm_quant import rms_norm_input_quant
 from vllm.model_executor.layers.layernorm import (
     GemmaRMSNorm as Qwen3NextRMSNorm,
 )
@@ -487,11 +488,15 @@ class Qwen3NextDecoderLayer(nn.Module):
             and hidden_states.shape[0] != full_num_tokens
         )
 
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        # Fuse input_layernorm with qkv_proj's input quantization when the
+        # attention kernel advertises a consumable key (RFC #43224). Skip on
+        # the sequence-parallel path below, which all-gathers a plain tensor.
+        qkv_proj = None
+        if not input_is_sequence_parallel and self.layer_type == "full_attention":
+            qkv_proj = getattr(self.self_attn, "qkv_proj", None)
+        hidden_states, residual = rms_norm_input_quant(
+            self.input_layernorm, hidden_states, residual, qkv_proj
+        )
 
         if input_is_sequence_parallel:
             hidden_states = tensor_model_parallel_all_gather(hidden_states, 0)
@@ -527,8 +532,14 @@ class Qwen3NextDecoderLayer(nn.Module):
             if not input_is_sequence_parallel:
                 residual = sequence_parallel_chunk(residual)
 
-        # Fully Connected
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        # Fully Connected. Fuse post_attention_layernorm with mlp.gate_up_proj's
+        # input quantization; MoE blocks have no gate_up_proj -> plain norm.
+        hidden_states, residual = rms_norm_input_quant(
+            self.post_attention_layernorm,
+            hidden_states,
+            residual,
+            getattr(self.mlp, "gate_up_proj", None),
+        )
         if self.use_attn_reduce_scatter_for_moe:
             hidden_states = self.mlp(
                 hidden_states,

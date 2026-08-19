@@ -323,6 +323,96 @@ except (RuntimeError, AttributeError):
     pass
 
 
+# Fused GemmaRMSNorm + quantization ops. Like the generic fused rms+quant ops,
+# but fold Gemma's (1 + weight) offset into the normalization in fp32 from a raw
+# (bf16/fp16) weight. This lets fp8-quantized Gemma-architecture models (e.g.
+# Qwen3.5-FP8) route their RMSNorm through the fused XPU quant kernel instead of
+# the separated-ops fallback. Reference numerics:
+#   normed_fp32 = x_normed_fp32 * (1 + weight.float())
+# then quantize normed_fp32 to the requested fp8/int8 dtype.
+def gemma_rms_norm_dynamic_per_token_quant(
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    epsilon: float,
+    quant_dtype: torch.dtype,
+    scale_ub: torch.Tensor | None = None,
+    residual: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    output = torch.empty(input.shape, dtype=quant_dtype, device=input.device)
+    scales = torch.empty(
+        (input.numel() // input.shape[-1], 1), device=input.device, dtype=torch.float32
+    )
+    torch.ops._C.gemma_rms_norm_dynamic_per_token_quant(
+        output, input, weight, scales, epsilon, scale_ub, residual
+    )
+    return output, scales
+
+
+def gemma_rms_norm_static_fp8_quant(
+    out: torch.Tensor,
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    scale: torch.Tensor,
+    epsilon: float,
+) -> None:
+    torch.ops._C.gemma_rms_norm_static_fp8_quant(out, input, weight, scale, epsilon)
+
+
+def fused_add_gemma_rms_norm_static_fp8_quant(
+    out: torch.Tensor,
+    input: torch.Tensor,
+    residual: torch.Tensor,
+    weight: torch.Tensor,
+    scale: torch.Tensor,
+    epsilon: float,
+) -> None:
+    # In-place fused residual add + GemmaRMSNorm + static fp8 quant. Updates
+    # residual in place; writes the quantized result to out.
+    torch.ops._C.fused_add_gemma_rms_norm_static_fp8_quant(
+        out, input, residual, weight, scale, epsilon
+    )
+
+
+try:
+
+    @register_fake("_C::gemma_rms_norm_dynamic_per_token_quant")
+    def _gemma_rms_norm_dynamic_per_token_quant_fake(
+        out: torch.Tensor,
+        input: torch.Tensor,
+        weight: torch.Tensor,
+        scales: torch.Tensor,
+        epsilon: float,
+        scale_ub: torch.Tensor | None = None,
+        residual: torch.Tensor | None = None,
+    ) -> None:
+        return None
+
+    @register_fake("_C::gemma_rms_norm_static_fp8_quant")
+    def _gemma_rms_norm_static_fp8_quant_fake(
+        out: torch.Tensor,
+        input: torch.Tensor,
+        weight: torch.Tensor,
+        scale: torch.Tensor,
+        epsilon: float,
+    ) -> None:
+        return None
+
+    @register_fake("_C::fused_add_gemma_rms_norm_static_fp8_quant")
+    def _fused_add_gemma_rms_norm_static_fp8_quant_fake(
+        out: torch.Tensor,
+        input: torch.Tensor,
+        residual: torch.Tensor,
+        weight: torch.Tensor,
+        scale: torch.Tensor,
+        epsilon: float,
+    ) -> None:
+        return None
+except (RuntimeError, AttributeError):
+    # Kernels package predates the gemma_* quant ops; callers must guard
+    # availability and fall back to the non-fused path.
+    pass
+
+
 def fused_qk_norm_rope(
     qkv: torch.Tensor,
     num_heads_q: int,
@@ -435,6 +525,7 @@ def rms_norm_per_block_quant(
     residual: torch.Tensor | None = None,
     is_scale_transposed: bool = False,
     tma_alignment: int = 0,
+    is_gemma: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     assert len(group_size) == 2
     output = torch.empty(input.shape, dtype=quant_dtype, device=input.device)
@@ -469,7 +560,12 @@ def rms_norm_per_block_quant(
         tma_alignment
     )
 
-    torch.ops._C.rms_norm_per_block_quant(
+    op = (
+        torch.ops._C.gemma_rms_norm_per_block_quant
+        if is_gemma
+        else torch.ops._C.rms_norm_per_block_quant
+    )
+    op(
         output,
         input,
         weight,

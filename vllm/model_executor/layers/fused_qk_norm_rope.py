@@ -40,6 +40,8 @@ def _fused_qk_rmsnorm_rope_gate_kernel(
     HEAD_BLOCK: tl.constexpr,
     ROT_HALF_BLOCK: tl.constexpr,
     HAS_PASS: tl.constexpr,
+    HAS_GATE: tl.constexpr,
+    Q_HEAD_STRIDE_MULT: tl.constexpr,
 ):
     token = tl.program_id(0)
     head = tl.program_id(1)
@@ -51,7 +53,13 @@ def _fused_qk_rmsnorm_rope_gate_kernel(
         w_ptr = k_weight_ptr
         out_base = k_out_ptr + token * k_out_stride_t + local_head * head_dim
     else:
-        in_base = q_gate_ptr + token * q_gate_stride_t + local_head * 2 * head_dim
+        # Per q head the projection is [q|gate] when gated (stride mult 2) and
+        # just [q] when not (stride mult 1, e.g. Qwen3-MoE).
+        in_base = (
+            q_gate_ptr
+            + token * q_gate_stride_t
+            + local_head * Q_HEAD_STRIDE_MULT * head_dim
+        )
         w_ptr = q_weight_ptr
         out_base = q_out_ptr + token * q_out_stride_t + local_head * head_dim
 
@@ -107,7 +115,7 @@ def _fused_qk_rmsnorm_rope_gate_kernel(
     tl.store(out_base + half_rotary + rot_offs, o2, mask=rot_mask)
 
     # --- Gate copy (q heads only, verbatim) ---
-    if not is_k:
+    if HAS_GATE and not is_k:
         gate_in_base = in_base + head_dim
         gate_out_base = gate_out_ptr + token * gate_out_stride_t + local_head * head_dim
         g = tl.load(gate_in_base + head_offs, mask=head_mask, other=0.0)
@@ -126,14 +134,22 @@ def fused_qk_rmsnorm_rope_gate(
     num_kv_heads: int,
     head_dim: int,
     rotary_dim: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    attn_output_gate: bool = True,
+) -> tuple[torch.Tensor, ...]:
     """Fused split + QK-RMSNorm + (partial) RoPE + gate copy for Qwen3.5 attn.
 
     Args:
-        q_gate: (n_tokens, num_q_heads * 2 * head_dim) -- per head: [q|gate]
+        q_gate: per head [q|gate] -> (n_tokens, num_q_heads * 2 * head_dim) when
+            ``attn_output_gate``; otherwise plain q, (n_tokens,
+            num_q_heads * head_dim).  May be a non-contiguous row-slice of a
+            fused qkv tensor: only ``stride(0)`` is assumed, elements within a
+            row must be contiguous.
         k: (n_tokens, num_kv_heads * head_dim)
-        q_weight: (head_dim,) GemmaRMSNorm effective weight (already +1)
-        k_weight: (head_dim,) GemmaRMSNorm effective weight (already +1)
+        q_weight: (head_dim,) *effective* RMSNorm weight, i.e. exactly the
+            factor the norm multiplies by.  For GemmaRMSNorm-style norms
+            (Qwen3-Next) the caller must pass ``weight + 1``; for a plain
+            RMSNorm (Qwen3-MoE) it passes ``weight`` unchanged.
+        k_weight: (head_dim,) as ``q_weight``.
         cos_sin_cache: (max_pos, rotary_dim) packed [cos|sin]
         positions: (n_tokens,) int32 or int64
         eps: RMSNorm epsilon
@@ -141,9 +157,11 @@ def fused_qk_rmsnorm_rope_gate(
         num_kv_heads: number of KV heads (after TP split)
         head_dim: per-head dimension
         rotary_dim: rotary dimension; must be even and <= head_dim
+        attn_output_gate: whether the q projection carries an interleaved gate
 
     Returns:
-        (q_out, k_out, gate_out) -- all contiguous (n_tokens, heads * head_dim).
+        ``(q_out, k_out, gate_out)`` when ``attn_output_gate``, else
+        ``(q_out, k_out)`` -- all contiguous (n_tokens, heads * head_dim).
         ``gate_out`` is the raw (pre-sigmoid) gate.
     """
     if rotary_dim <= 0 or rotary_dim > head_dim or rotary_dim % 2 != 0:
@@ -159,9 +177,10 @@ def fused_qk_rmsnorm_rope_gate(
     k_out = torch.empty(
         (n_tokens, num_kv_heads * head_dim), dtype=k.dtype, device=k.device
     )
-    gate_out = torch.empty_like(q_out)
+    # Skip the allocation entirely when un-gated; the kernel never stores to it.
+    gate_out = torch.empty_like(q_out) if attn_output_gate else q_out
     if n_tokens == 0:
-        return q_out, k_out, gate_out
+        return (q_out, k_out, gate_out) if attn_output_gate else (q_out, k_out)
 
     half_rotary = rotary_dim // 2
     head_block = triton.next_power_of_2(head_dim)
@@ -195,7 +214,9 @@ def fused_qk_rmsnorm_rope_gate(
         HEAD_BLOCK=head_block,
         ROT_HALF_BLOCK=rot_half_block,
         HAS_PASS=rotary_dim < head_dim,
+        HAS_GATE=attn_output_gate,
+        Q_HEAD_STRIDE_MULT=2 if attn_output_gate else 1,
         num_warps=num_warps,
         num_stages=2,
     )
-    return q_out, k_out, gate_out
+    return (q_out, k_out, gate_out) if attn_output_gate else (q_out, k_out)

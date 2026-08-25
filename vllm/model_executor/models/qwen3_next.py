@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """Inference-only Qwen3Next model."""
 
+import os
 from collections.abc import Iterable
 from itertools import islice
 
@@ -326,6 +327,55 @@ class Qwen3NextAttention(nn.Module):
             and text_only
         )
 
+        # XPU port of vllm-project/vllm#52901: the same fusion *plus* the paged
+        # KV-cache write (Scope B), via a vendored platform-neutral Triton
+        # kernel.  Upstream this is a torch.compile pattern-matcher pass gated
+        # on ROCm/AITER; here it is a direct custom-op call from
+        # `_project_qkv_gate`, which keeps it inside the compiled region and
+        # makes the ordering dependency explicit (attention consumes q/k/v that
+        # this op produces) instead of relying on a dummy-tensor dependency.
+        self.use_xpu_fused_qkv_norm_rope_kvcache = False
+        if (
+            self.attn_output_gate
+            and text_only
+            and getattr(self.rotary_emb, "is_neox_style", False)
+            and not self.dual_chunk_attention_config
+            and os.environ.get("VLLM_XPU_FUSED_QKV_NORM_ROPE_KVCACHE", "0") == "1"
+        ):
+            from vllm.model_executor.layers.xpu_fused_qkv_rope_cache import (
+                xpu_fusion_supported,
+            )
+
+            kv_cache_dtype = (
+                cache_config.cache_dtype if cache_config is not None else "auto"
+            )
+            self.use_xpu_fused_qkv_norm_rope_kvcache = xpu_fusion_supported(
+                self.head_dim,
+                True,
+                kv_cache_dtype,
+            )
+            if self.use_xpu_fused_qkv_norm_rope_kvcache:
+                # Scope B: the cache is written inside the fused op, so this
+                # layer's standalone KV-cache-update op must not write it again.
+                from vllm.model_executor.layers.xpu_fused_qkv_rope_cache import (
+                    disable_separate_kv_cache_update,
+                )
+
+                disable_separate_kv_cache_update(self.attn)
+                # Cache the fp32 norm weights to keep 2 casts per fused layer
+                # per step out of the hot path (worth ~10-15% e2e at TP4).
+                # These MUST be captured lazily on the first forward, NOT here:
+                # vLLM constructs the model with uninitialized parameters and
+                # loads the checkpoint into them in place afterwards, so a copy
+                # taken in __init__ silently snapshots garbage.  That produced a
+                # ~30% error on q/k (v/gate exact) with plausible-looking output.
+                self._fused_q_weight = None
+                self._fused_k_weight = None
+                logger.info_once(
+                    "Qwen3-Next: using the XPU fused gated-QKV + QK-norm + "
+                    "RoPE + KV-cache kernel (Scope B)."
+                )
+
     def _project_qkv_gate(
         self,
         qkv: torch.Tensor,
@@ -337,6 +387,51 @@ class Qwen3NextAttention(nn.Module):
         split + QK-RMSNorm + RoPE path. ``gate`` is ``None`` when output
         gating is disabled.
         """
+        if self.use_xpu_fused_qkv_norm_rope_kvcache:
+            pos = positions[0] if positions.ndim == 2 else positions
+            T = qkv.shape[0]
+            # Caller-allocated destinations: the op declares these in
+            # `mutates_args`, which is what pins it in the compiled graph
+            # relative to the attention op that reads the KV cache it writes.
+            q = torch.empty(
+                (T, self.num_heads * self.head_dim),
+                dtype=qkv.dtype, device=qkv.device,
+            )
+            k = torch.empty(
+                (T, self.num_kv_heads * self.head_dim),
+                dtype=qkv.dtype, device=qkv.device,
+            )
+            v = torch.empty_like(k)
+            gate = torch.empty_like(q)
+            if self._fused_q_weight is None:
+                # Lazy: weights are loaded after __init__ (see the note there).
+                self._fused_q_weight = self.q_norm.weight.float()
+                self._fused_k_weight = self.k_norm.weight.float()
+            torch.ops.vllm.xpu_fused_qkv_norm_rope_kvcache_gated(
+                q,
+                k,
+                v,
+                gate,
+                qkv,
+                pos,
+                # NOTE: unlike fused_qk_rmsnorm_rope_gate (which wants
+                # weight + 1.0), the vendored AITER kernel bakes the Gemma-style
+                # (1.0 + w) into its own _rms_norm, so the raw weight is passed
+                # here. Pre-adding 1.0 would silently double-count it.
+                self._fused_q_weight,
+                self._fused_k_weight,
+                self.rotary_emb.cos_sin_cache,
+                self.num_heads,
+                self.num_kv_heads,
+                self.head_dim,
+                self.rotary_emb.rotary_dim,
+                self.q_norm.variance_epsilon,
+                self.attn.layer_name,
+            )
+            if os.environ.get("VLLM_XPU_FUSED_DEBUG") == "2":
+                self._debug_compare_eager(qkv, positions, q, k, v, gate)
+            return q, k, v, gate
+
         if self.use_fused_qk_norm_rope_gate:
             q_gate, k, v = qkv.split(
                 [self.q_size * 2, self.kv_size, self.kv_size], dim=-1
@@ -381,6 +476,38 @@ class Qwen3NextAttention(nn.Module):
         )
         q, k = self.rotary_emb(positions, q, k)
         return q, k, v, gate
+
+    def _debug_compare_eager(self, qkv, positions, q, k, v, gate):
+        """Compare the fused op against this class's own eager branch."""
+        q_size, kv_size = self.q_size, self.kv_size
+        q_gate, ek, ev = qkv.split([q_size * 2, kv_size, kv_size], dim=-1)
+        orig_shape = q_gate.shape[:-1]
+        q_gate = q_gate.view(*orig_shape, self.num_heads, -1)
+        eq, egate = torch.chunk(q_gate, 2, dim=-1)
+        eq = eq.reshape(*orig_shape, -1)
+        egate = egate.reshape(*orig_shape, -1)
+        eq = self.q_norm(eq.view(-1, self.num_heads, self.head_dim)).view(
+            -1, self.num_heads * self.head_dim
+        )
+        ek = self.k_norm(ek.view(-1, self.num_kv_heads, self.head_dim)).view(
+            -1, self.num_kv_heads * self.head_dim
+        )
+        eq, ek = self.rotary_emb(positions, eq, ek)
+
+        def rel(a, b):
+            a = a.reshape(b.shape).float()
+            b = b.float()
+            n = b.norm()
+            # Return NaN (not 0.0) for a zero reference: warmup/profile runs
+            # feed all-zero activations, and reporting those as 0.0 error made
+            # a real ~30% regression look like a clean pass.
+            return ((a - b).norm() / n).item() if n > 0 else float("nan")
+
+        logger.info(
+            "xpu_fused_dbg[%s] T=%d q=%.3e k=%.3e v=%.3e gate=%.3e",
+            self.attn.layer_name, qkv.shape[0],
+            rel(q, eq), rel(k, ek), rel(v, ev), rel(gate, egate),
+        )
 
     def forward(
         self,

@@ -23,6 +23,7 @@
 # limitations under the License.
 """Inference-only Qwen3MoE model compatible with HuggingFace weights."""
 
+import os
 from collections.abc import Iterable
 from itertools import islice
 from typing import Any
@@ -319,12 +320,176 @@ class Qwen3MoeAttention(nn.Module):
         self.q_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
         self.k_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
 
+        # XPU port of vllm-project/vllm#52901 (Scope B: fusion *plus* the paged
+        # KV-cache write).  Qwen3-MoE is the *un-gated* case: qkv_proj emits a
+        # plain [q|k|v], so the kernel runs with attn_output_gate=False.
+        # Unlike Qwen3-Next, every layer here is full attention, so all 48
+        # layers are eligible.
+        # Diagnostic: fuse only the first N layers, to test whether any e2e
+        # cost/benefit scales linearly with the number of fused layers.
+        # Honored by BOTH fusion paths so the two are directly comparable.
+        _max_fused = int(os.environ.get("VLLM_XPU_FUSED_MAX_LAYERS", "-1"))
+        _layer_idx = extract_layer_index(prefix)
+        _layer_ok = _max_fused < 0 or _layer_idx < _max_fused
+
+        # PR #44176 (Scope A: split + QK-norm + RoPE, no KV-cache write),
+        # un-gated variant for Qwen3-MoE.  Upstream gates this on
+        # `attn_output_gate and current_platform.is_cuda()`; the kernel itself
+        # is portable Triton, so we allow XPU (and CUDA) here.  Mutually
+        # exclusive with the #52901 Scope-B path below, which subsumes it.
+        self.use_fused_qk_norm_rope = False
+        if (
+            _layer_ok
+            and getattr(self.rotary_emb, "is_neox_style", False)
+            and not dual_chunk_attention_config
+            and os.environ.get("VLLM_XPU_FUSED_QK_NORM_ROPE", "0") == "1"
+        ):
+            from vllm.platforms import current_platform
+
+            rot = getattr(self.rotary_emb, "rotary_dim", self.head_dim)
+            self.use_fused_qk_norm_rope = (
+                (current_platform.is_xpu() or current_platform.is_cuda())
+                and rot > 0
+                and rot % 2 == 0
+                and rot <= self.head_dim
+            )
+            if self.use_fused_qk_norm_rope:
+                self._qkr_q_weight = None
+                self._qkr_k_weight = None
+                logger.info_once(
+                    "Qwen3-MoE: using the fused QK-norm + RoPE Triton kernel "
+                    "(PR #44176, un-gated)."
+                )
+
+        self.use_xpu_fused_qkv_norm_rope_kvcache = False
+        if (
+            _layer_ok
+            and getattr(self.rotary_emb, "is_neox_style", False)
+            and not dual_chunk_attention_config
+            and os.environ.get("VLLM_XPU_FUSED_QKV_NORM_ROPE_KVCACHE", "0") == "1"
+        ):
+            from vllm.model_executor.layers.xpu_fused_qkv_rope_cache import (
+                xpu_fusion_supported,
+            )
+
+            kv_cache_dtype = (
+                cache_config.cache_dtype if cache_config is not None else "auto"
+            )
+            self.use_xpu_fused_qkv_norm_rope_kvcache = xpu_fusion_supported(
+                self.head_dim,
+                True,
+                kv_cache_dtype,
+            )
+            if self.use_xpu_fused_qkv_norm_rope_kvcache:
+                from vllm.model_executor.layers.xpu_fused_qkv_rope_cache import (
+                    disable_separate_kv_cache_update,
+                )
+
+                # The cache is written inside the fused op, so this layer's
+                # standalone KV-cache-update op must not write it again.
+                disable_separate_kv_cache_update(self.attn)
+                # Captured lazily on first forward, NOT here: vLLM builds the
+                # model with uninitialized parameters and loads the checkpoint
+                # into them in place afterwards, so a copy taken in __init__
+                # snapshots garbage.
+                self._fused_q_weight = None
+                self._fused_k_weight = None
+                # Scope B subsumes Scope A; never run both.
+                self.use_fused_qk_norm_rope = False
+                logger.info_once(
+                    "Qwen3-MoE: using the XPU fused QKV + QK-norm + RoPE + "
+                    "KV-cache kernel (un-gated, Scope B)."
+                )
+
+    def _fused_qk_norm_rope(self, qkv, positions):
+        """PR #44176 (Scope A): split + QK-RMSNorm + RoPE in one Triton launch.
+
+        Unlike the #52901 Scope-B op this does NOT write the paged KV cache and
+        does not materialize v, so v stays a zero-copy view of qkv and the
+        layer's normal KV-cache update runs untouched.
+        """
+        from vllm.model_executor.layers.fused_qk_norm_rope import (
+            fused_qk_rmsnorm_rope_gate,
+        )
+
+        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+        if self._qkr_q_weight is None:
+            # The kernel takes the *effective* gamma.  Qwen3-MoE uses vLLM's
+            # plain RMSNorm (x_normed * w), so the raw weight IS the effective
+            # gamma -- no +1, unlike Qwen3-Next's GemmaRMSNorm-style norm, and
+            # no -1 either (that compensation belongs to the AITER kernel in
+            # the #52901 port, which bakes (1+w) in internally).
+            # Lazy: weights are loaded into the module after __init__.
+            self._qkr_q_weight = self.q_norm.weight.detach()
+            self._qkr_k_weight = self.k_norm.weight.detach()
+        q, k = fused_qk_rmsnorm_rope_gate(
+            q,
+            k,
+            self._qkr_q_weight,
+            self._qkr_k_weight,
+            self.rotary_emb.cos_sin_cache,
+            positions,
+            self.q_norm.variance_epsilon,
+            self.num_heads,
+            self.num_kv_heads,
+            self.head_dim,
+            self.rotary_emb.rotary_dim,
+            attn_output_gate=False,
+        )
+        return q, k, v
+
+    def _fused_qkv(self, qkv, positions):
+        """Fused split + QK-RMSNorm + RoPE + paged-KV-cache write."""
+        T = qkv.shape[0]
+        # Caller-allocated destinations: the op declares these in
+        # `mutates_args`, which pins it in the compiled graph relative to the
+        # attention op that reads the KV cache it writes.
+        q = torch.empty((T, self.q_size), dtype=qkv.dtype, device=qkv.device)
+        k = torch.empty((T, self.kv_size), dtype=qkv.dtype, device=qkv.device)
+        v = torch.empty_like(k)
+        if self._fused_q_weight is None:
+            # NOTE: the vendored AITER kernel bakes a Gemma-style (1.0 + w)
+            # into its own _rms_norm, but Qwen3-MoE uses vLLM's *plain*
+            # RMSNorm (x_normed * w).  Subtracting 1.0 here cancels it.
+            # This is the opposite of Qwen3-Next, which passes w unchanged.
+            # Exact in fp32 for w in [0.5, 2] (Sterbenz), which covers real
+            # RMSNorm weights; see qwen3moe_fusion_check.py.
+            self._fused_q_weight = self.q_norm.weight.float() - 1.0
+            self._fused_k_weight = self.k_norm.weight.float() - 1.0
+        torch.ops.vllm.xpu_fused_qkv_norm_rope_kvcache(
+            q,
+            k,
+            v,
+            qkv,
+            positions,
+            self._fused_q_weight,
+            self._fused_k_weight,
+            self.rotary_emb.cos_sin_cache,
+            self.num_heads,
+            self.num_kv_heads,
+            self.head_dim,
+            self.rotary_emb.rotary_dim,
+            self.q_norm.variance_epsilon,
+            self.attn.layer_name,
+        )
+        return q, k, v
+
     def forward(
         self,
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
+        if self.use_xpu_fused_qkv_norm_rope_kvcache:
+            q, k, v = self._fused_qkv(qkv, positions)
+            attn_output = self.attn(q, k, v)
+            output, _ = self.o_proj(attn_output)
+            return output
+        if self.use_fused_qk_norm_rope:
+            q, k, v = self._fused_qk_norm_rope(qkv, positions)
+            attn_output = self.attn(q, k, v)
+            output, _ = self.o_proj(attn_output)
+            return output
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         # Add qk-norm
         q_by_head = q.view(*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim)

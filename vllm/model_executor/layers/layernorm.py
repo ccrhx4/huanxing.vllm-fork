@@ -171,7 +171,7 @@ class GemmaRMSNorm(CustomOp):
         x: torch.Tensor,
         residual: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-        from vllm import _custom_ops as ops
+        from vllm import _xpu_ops as ops
 
         # Fall back to the native path if the fused gemma kernels are not
         # available in the installed vllm-xpu-kernels package.

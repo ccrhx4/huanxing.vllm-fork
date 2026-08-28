@@ -25,47 +25,6 @@ else:
     except ImportError:
         from torch.library import impl_abstract as register_fake
 
-if hasattr(torch.ops._C, "gemma_rms_norm"):
-
-    def gemma_rms_norm(
-        out: torch.Tensor,
-        input: torch.Tensor,
-        weight: torch.Tensor,
-        epsilon: float,
-    ) -> None:
-        # GemmaRMSNorm: computes out = (x_normed_fp32 * (1 + weight.float())
-        # ).to(dtype) with a raw (bf16/fp16) weight; the +1 offset and fp32
-        # multiply are done in-kernel. See vllm-xpu-kernels gemma_rms_norm.
-        # CUDA has no such kernel, so this op only lives in _xpu_ops.
-        torch.ops._C.gemma_rms_norm(out, input, weight, epsilon)
-
-    def fused_add_gemma_rms_norm(
-        input: torch.Tensor,
-        residual: torch.Tensor,
-        weight: torch.Tensor,
-        epsilon: float,
-    ) -> None:
-        # Fused residual add + GemmaRMSNorm. Updates input/residual in place.
-        torch.ops._C.fused_add_gemma_rms_norm(input, residual, weight, epsilon)
-
-    @register_fake("_C::gemma_rms_norm")
-    def _gemma_rms_norm_fake(
-        out: torch.Tensor,
-        input: torch.Tensor,
-        weight: torch.Tensor,
-        epsilon: float,
-    ) -> None:
-        return None
-
-    @register_fake("_C::fused_add_gemma_rms_norm")
-    def _fused_add_gemma_rms_norm_fake(
-        input: torch.Tensor,
-        residual: torch.Tensor,
-        weight: torch.Tensor,
-        epsilon: float,
-    ) -> None:
-        return None
-
 
 if hasattr(torch.ops._xpu_C, "fp8_gemm"):
 

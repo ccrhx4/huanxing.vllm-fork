@@ -85,3 +85,45 @@ def fused_add_rms_norm(
 
     torch.ops._C.fused_add_rms_norm(x, x_residual, weight, epsilon)
     return x, x_residual
+
+
+# CUDA has no gemma_rms_norm kernel; only vllm-xpu-kernels builds that bundle
+# it register torch.ops._C.gemma_rms_norm.
+GEMMA_RMS_NORM_XPU = current_platform.is_xpu() and hasattr(
+    torch.ops._C, "gemma_rms_norm"
+)
+
+gemma_rms_norm_dtype_match = lambda x, weight, epsilon: (
+    weight is None or weight.dtype == x.dtype
+)
+"""vLLM XPU gemma_rms_norm kernel requires matching input/weight dtype."""
+
+gemma_rms_norm_add_dtype_match = lambda x, x_residual, weight, epsilon: (
+    weight is None or weight.dtype == x.dtype
+)
+"""vLLM XPU fused_add_gemma_rms_norm kernel requires matching input/weight dtype."""
+
+
+@ir.ops.gemma_rms_norm.register_impl(
+    "vllm_c", supports_args=gemma_rms_norm_dtype_match, supported=GEMMA_RMS_NORM_XPU
+)
+def gemma_rms_norm(x: Tensor, weight: Tensor | None, epsilon: float) -> Tensor:
+    output = torch.empty_like(x)
+    torch.ops._C.gemma_rms_norm(output, x, weight, epsilon)
+    return output
+
+
+@ir.ops.gemma_fused_add_rms_norm.register_impl(
+    "vllm_c",
+    supports_args=gemma_rms_norm_add_dtype_match,
+    supported=GEMMA_RMS_NORM_XPU,
+    inplace=True,
+)
+def gemma_fused_add_rms_norm(
+    x: Tensor,
+    x_residual: Tensor,
+    weight: Tensor | None,
+    epsilon: float,
+) -> tuple[Tensor, Tensor]:
+    torch.ops._C.fused_add_gemma_rms_norm(x, x_residual, weight, epsilon)
+    return x, x_residual

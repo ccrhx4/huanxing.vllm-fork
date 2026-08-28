@@ -78,3 +78,68 @@ def _fused_add_rms_norm_input_generator(
     x_residual = torch.randn(num_tokens, hidden_size, dtype=dtype, device=device)
     weight = torch.randn(hidden_size, dtype=dtype, device=device)
     return x, x_residual, weight, epsilon
+
+
+@register_op
+def gemma_rms_norm(x: Tensor, weight: Tensor | None, epsilon: float) -> Tensor:
+    """Gemma-style RMS norm: x * (1 + w) instead of x * w."""
+    orig_dtype = x.dtype
+    x = x.to(torch.float32)
+    variance = x.pow(2).mean(dim=-1, keepdim=True)
+    x = x * torch.rsqrt(variance + epsilon)
+    if weight is not None:
+        x = x * (1.0 + weight.to(torch.float32))
+    return x.to(orig_dtype)
+
+
+@gemma_rms_norm.register_input_generator
+def _gemma_rms_norm_input_generator(
+    num_tokens: int,
+    hidden_size: int,
+    dtype: torch.dtype,
+    epsilon: float = 1e-5,
+    device: torch.device | str | None = None,
+) -> tuple:
+    x = torch.randn(num_tokens, hidden_size, dtype=dtype, device=device)
+    weight = torch.randn(hidden_size, dtype=dtype, device=device)
+    return x, weight, epsilon
+
+
+gemma_rms_norm.override_tolerance(torch.float16, atol=1e-2, rtol=2e-3)
+
+
+@register_op(allow_inplace=True)
+def gemma_fused_add_rms_norm(
+    x: Tensor,
+    x_residual: Tensor,
+    weight: Tensor | None,
+    epsilon: float,
+) -> tuple[Tensor, Tensor]:
+    """Fused add and Gemma-style RMS norm."""
+    orig_dtype = x.dtype
+    x = x.to(torch.float32)
+    x = x + x_residual.to(torch.float32)
+    x_residual = x.to(orig_dtype)
+
+    variance = x.pow(2).mean(dim=-1, keepdim=True)
+    x = x * torch.rsqrt(variance + epsilon)
+    if weight is not None:
+        x = x * (1.0 + weight.to(torch.float32))
+    return x.to(orig_dtype), x_residual
+
+
+gemma_fused_add_rms_norm.override_tolerance(torch.float16, atol=1e-2, rtol=2e-3)
+
+
+@gemma_fused_add_rms_norm.register_input_generator
+def _gemma_fused_add_rms_norm_input_generator(
+    num_tokens: int,
+    hidden_size: int,
+    dtype: torch.dtype,
+    epsilon: float = 1e-5,
+    device: torch.device | str | None = None,
+) -> tuple:
+    x = torch.randn(num_tokens, hidden_size, dtype=dtype, device=device)
+    x_residual = torch.randn(num_tokens, hidden_size, dtype=dtype, device=device)
+    weight = torch.randn(hidden_size, dtype=dtype, device=device)
+    return x, x_residual, weight, epsilon

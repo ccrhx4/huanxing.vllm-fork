@@ -154,10 +154,11 @@ class GemmaRMSNorm(CustomOp):
         residual: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """PyTorch-native implementation equivalent to forward()."""
-        weight = self.weight.float() + 1.0
         if residual is None:
-            return ir.ops.rms_norm(x, weight, self.variance_epsilon)
-        return ir.ops.fused_add_rms_norm(x, residual, weight, self.variance_epsilon)
+            return ir.ops.gemma_rms_norm(x, self.weight.data, self.variance_epsilon)
+        return ir.ops.gemma_fused_add_rms_norm(
+            x, residual, self.weight.data, self.variance_epsilon
+        )
 
     def forward_cuda(
         self,
@@ -171,23 +172,7 @@ class GemmaRMSNorm(CustomOp):
         x: torch.Tensor,
         residual: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-        from vllm import _xpu_ops as ops
-
-        # Fall back to the native path if the fused gemma kernels are not
-        # available in the installed vllm-xpu-kernels package.
-        if not hasattr(torch.ops._C, "gemma_rms_norm"):
-            return self.forward_native(x, residual)
-
-        # Pass the raw (bf16/fp16) weight; the +1 offset and the fp32 multiply
-        # are folded into the kernel (matches forward_native numerics).
-        if residual is not None:
-            ops.fused_add_gemma_rms_norm(
-                x, residual, self.weight.data, self.variance_epsilon
-            )
-            return x, residual
-        out = torch.empty_like(x)
-        ops.gemma_rms_norm(out, x, self.weight.data, self.variance_epsilon)
-        return out
+        return self.forward_native(x, residual)
 
 
 # --8<-- [start:rms_norm_gated]

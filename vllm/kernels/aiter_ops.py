@@ -35,21 +35,28 @@ AITER_SUPPORTED = is_aiter_found()
 """Most kernels in this file are supported if AITER is installed."""
 
 rms_no_var_16bit_only = (
-    lambda x, weight, epsilon, variance_size=None: variance_size is None
+    lambda x, weight, epsilon, variance_size=None, weight_bias=0.0: variance_size
+    is None
+    and weight_bias == 0.0
     and x.dtype in (torch.float16, torch.bfloat16)
     and (weight is None or weight.dtype == x.dtype)
 )
 """AITER rms_norm only supports float16 and bfloat16 acts, no var_size override,
-and requires weight dtype to match x dtype."""
+no weight_bias, and requires weight dtype to match x dtype."""
 
 
 @ir.ops.rms_norm.register_impl(
     "aiter", supports_args=rms_no_var_16bit_only, supported=AITER_SUPPORTED
 )
 def rms_norm(
-    x: Tensor, weight: Tensor | None, epsilon: float, variance_size: int | None = None
+    x: Tensor,
+    weight: Tensor | None,
+    epsilon: float,
+    variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> Tensor:
     assert variance_size is None
+    assert weight_bias == 0.0
     assert x.dtype in (torch.float16, torch.bfloat16)
     if weight is None:
         weight = torch.ones(x.shape[-1], device=x.device, dtype=x.dtype)
@@ -76,13 +83,16 @@ direct_register_aiter_op(
     op_name="rms_norm", op_func=_rms_norm_impl, fake_impl=_rms_norm_fake
 )
 rms_add_no_var_16bit_only = (
-    lambda x, x_residual, weight, epsilon, variance_size=None: variance_size is None
-    and x.dtype in (torch.float16, torch.bfloat16)
-    and (weight is None or weight.dtype == x.dtype)
+    lambda x, x_residual, weight, epsilon, variance_size=None, weight_bias=0.0: (
+        variance_size is None
+        and weight_bias == 0.0
+        and x.dtype in (torch.float16, torch.bfloat16)
+        and (weight is None or weight.dtype == x.dtype)
+    )
 )
 """
-AITER fused_add_rms_norm only supports 16-bit activations and no var_size override.
-Requires weight dtype to match x dtype.
+AITER fused_add_rms_norm only supports 16-bit activations, no var_size
+override, and no weight_bias. Requires weight dtype to match x dtype.
 """
 
 
@@ -95,8 +105,10 @@ def fused_add_rms_norm(
     weight: Tensor | None,
     epsilon: float,
     variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> tuple[Tensor, Tensor]:
     assert variance_size is None
+    assert weight_bias == 0.0
     assert x.dtype in (torch.float16, torch.bfloat16)
     if weight is None:
         weight = torch.ones(x.shape[-1], device=x.device, dtype=x.dtype)

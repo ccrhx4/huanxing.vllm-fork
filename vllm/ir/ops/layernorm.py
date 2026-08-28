@@ -8,16 +8,25 @@ from ..op import register_op
 
 @register_op
 def rms_norm(
-    x: Tensor, weight: Tensor | None, epsilon: float, variance_size: int | None = None
+    x: Tensor,
+    weight: Tensor | None,
+    epsilon: float,
+    variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> Tensor:
-    """Weighted root-mean-square layer normalization"""
+    """Weighted root-mean-square layer normalization
+
+    weight_bias is added to weight (in fp32) before the multiply, e.g. to
+    support Gemma-style RMSNorm which uses raw (zero-centered) weights.
+    """
     orig_dtype = x.dtype
     x = x.to(torch.float32)
     x_var = x if variance_size is None else x[..., :variance_size]
     variance = x_var.pow(2).mean(dim=-1, keepdim=True)
     x = x * torch.rsqrt(variance + epsilon)
     if weight is not None:
-        x = x.to(weight.dtype) * weight
+        w = weight.to(torch.float32) + weight_bias if weight_bias else weight
+        x = x.to(w.dtype) * w
     return x.to(orig_dtype)
 
 
@@ -47,8 +56,13 @@ def fused_add_rms_norm(
     weight: Tensor | None,
     epsilon: float,
     variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> tuple[Tensor, Tensor]:
-    """Fused add and weighted root-mean-square layer normalization"""
+    """Fused add and weighted root-mean-square layer normalization
+
+    weight_bias is added to weight (in fp32) before the multiply, e.g. to
+    support Gemma-style RMSNorm which uses raw (zero-centered) weights.
+    """
     orig_dtype = x.dtype
     x = x.to(torch.float32)
     x = x + x_residual.to(torch.float32)
@@ -58,7 +72,8 @@ def fused_add_rms_norm(
     variance = x_var.pow(2).mean(dim=-1, keepdim=True)
     x = x * torch.rsqrt(variance + epsilon)
     if weight is not None:
-        x = x.to(weight.dtype) * weight
+        w = weight.to(torch.float32) + weight_bias if weight_bias else weight
+        x = x.to(w.dtype) * w
     return x.to(orig_dtype), x_residual
 
 

@@ -59,7 +59,9 @@ def _is_oink_stride_compatible_2d(x_2d: Tensor) -> bool:
 
 
 oink_rms_supported = (
-    lambda x, weight, epsilon, variance_size=None: variance_size is None
+    lambda x, weight, epsilon, variance_size=None, weight_bias=0.0: variance_size
+    is None
+    and weight_bias == 0.0
     and weight is not None
     and x.dim() >= 2
     and x.dtype == weight.dtype
@@ -68,8 +70,8 @@ oink_rms_supported = (
     and _is_oink_stride_compatible_2d(x.view(-1, x.shape[-1]))
 )
 """
-Oink rms only supports 2d-like inputs with contiguous weight 
-and no variance_size override.
+Oink rms only supports 2d-like inputs with contiguous weight, no
+variance_size override, and no weight_bias.
 """
 
 
@@ -81,25 +83,30 @@ def rms_norm(
     weight: Tensor | None,
     epsilon: float,
     variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> Tensor:
     assert variance_size is None
+    assert weight_bias == 0.0
     x_2d = x.view(-1, x.shape[-1])
     return torch.ops.oink.rmsnorm(x_2d, weight, epsilon).view_as(x)
 
 
 oink_add_rms_supported = (
-    lambda x, x_residual, weight, epsilon, variance_size=None: variance_size is None
-    and weight is not None
-    and x.dim() >= 2
-    and x.dtype == weight.dtype
-    and weight.is_contiguous()
-    and _can_view_as_2d(x)
-    and _is_oink_stride_compatible_2d(x.view(-1, x.shape[-1]))
-    # residual must have 2d-compatible strides and match x shape/dtype
-    and x.dtype == x_residual.dtype
-    and x.shape == x_residual.shape
-    and _can_view_as_2d(x_residual)
-    and _is_oink_stride_compatible_2d(x_residual.view(-1, x_residual.shape[-1]))
+    lambda x, x_residual, weight, epsilon, variance_size=None, weight_bias=0.0: (
+        variance_size is None
+        and weight_bias == 0.0
+        and weight is not None
+        and x.dim() >= 2
+        and x.dtype == weight.dtype
+        and weight.is_contiguous()
+        and _can_view_as_2d(x)
+        and _is_oink_stride_compatible_2d(x.view(-1, x.shape[-1]))
+        # residual must have 2d-compatible strides and match x shape/dtype
+        and x.dtype == x_residual.dtype
+        and x.shape == x_residual.shape
+        and _can_view_as_2d(x_residual)
+        and _is_oink_stride_compatible_2d(x_residual.view(-1, x_residual.shape[-1]))
+    )
 )
 """
 Oink fused_add_rms_norm has the same constraints as rms_norm,
@@ -119,8 +126,10 @@ def fused_add_rms_norm(
     weight: Tensor | None,
     epsilon: float,
     variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> tuple[Tensor, Tensor]:
     assert variance_size is None
+    assert weight_bias == 0.0
     x_2d = x.view(-1, x.shape[-1])
     residual_2d = x_residual.view(-1, x_residual.shape[-1])
     torch.ops.oink.fused_add_rms_norm(x_2d, residual_2d, weight, epsilon)

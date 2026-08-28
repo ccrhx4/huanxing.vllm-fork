@@ -14,17 +14,25 @@ IS_ROCM = current_platform.is_rocm()
 """ROCm needs shape normalization before calling some vLLM C kernels."""
 GPGPU_DEVICE = CUDA_ALIKE or current_platform.is_xpu()
 
-rms_no_var_size = lambda x, weight, epsilon, variance_size=None: (
-    variance_size is None and (weight is None or weight.dtype == x.dtype)
+rms_no_var_size = lambda x, weight, epsilon, variance_size=None, weight_bias=0.0: (
+    variance_size is None
+    and (weight is None or weight.dtype == x.dtype)
+    and (weight_bias == 0.0 or current_platform.is_xpu())
 )
-"""vLLM kernel requires no variance_size override and matching input/weight dtype."""
+"""vLLM kernel requires no variance_size override and matching input/weight
+dtype. weight_bias is only supported on XPU; other platforms fall back to
+the native impl for nonzero weight_bias (e.g. Gemma-style RMSNorm)."""
 
 
 @ir.ops.rms_norm.register_impl(
     "vllm_c", supports_args=rms_no_var_size, supported=GPGPU_DEVICE
 )
 def rms_norm(
-    x: Tensor, weight: Tensor | None, epsilon: float, variance_size: int | None = None
+    x: Tensor,
+    weight: Tensor | None,
+    epsilon: float,
+    variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> Tensor:
     assert variance_size is None
     # ROCm's vLLM C RMSNorm kernel operates on contiguous 2D tensors.
@@ -40,15 +48,22 @@ def rms_norm(
         return output.reshape(original_shape)
 
     output = torch.empty(x.shape, device=x.device, dtype=x.dtype)
-    torch.ops._C.rms_norm(output, x, weight, epsilon)
+    if current_platform.is_xpu():
+        torch.ops._C.rms_norm(output, x, weight, epsilon, weight_bias)
+    else:
+        torch.ops._C.rms_norm(output, x, weight, epsilon)
     return output
 
 
-rms_add_no_var_size = lambda x, x_residual, weight, epsilon, variance_size=None: (
-    variance_size is None and (weight is None or weight.dtype == x.dtype)
+rms_add_no_var_size = (
+    lambda x, x_residual, weight, epsilon, variance_size=None, weight_bias=0.0: (  # noqa: E501
+        variance_size is None
+        and (weight is None or weight.dtype == x.dtype)
+        and (weight_bias == 0.0 or current_platform.is_xpu())
+    )
 )
 """vLLM Kernel does not support variance_size parameter and requires
-matching input/weight dtype."""
+matching input/weight dtype. weight_bias is only supported on XPU."""
 
 
 @ir.ops.fused_add_rms_norm.register_impl(
@@ -63,6 +78,7 @@ def fused_add_rms_norm(
     weight: Tensor | None,
     epsilon: float,
     variance_size: int | None = None,
+    weight_bias: float = 0.0,
 ) -> tuple[Tensor, Tensor]:
     assert variance_size is None
     if IS_ROCM and (not x.is_contiguous() or not x_residual.is_contiguous()):
@@ -83,5 +99,8 @@ def fused_add_rms_norm(
         torch.ops._C.fused_add_rms_norm(x, x_residual, weight, epsilon)
         return x.view(original_shape), x_residual.view(original_shape)
 
-    torch.ops._C.fused_add_rms_norm(x, x_residual, weight, epsilon)
+    if current_platform.is_xpu():
+        torch.ops._C.fused_add_rms_norm(x, x_residual, weight, epsilon, weight_bias)
+    else:
+        torch.ops._C.fused_add_rms_norm(x, x_residual, weight, epsilon)
     return x, x_residual

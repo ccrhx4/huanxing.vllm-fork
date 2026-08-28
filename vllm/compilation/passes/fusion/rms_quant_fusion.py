@@ -146,9 +146,11 @@ class RMSNormQuantPattern:
         has_col_major_scales: bool = False,
         is_e8m0: bool = False,
         is_tma_aligned: bool = False,
+        weight_bias: float = 0.0,
     ) -> None:
         self.epsilon = epsilon
         self.quant_dtype = key.quant.dtype
+        self.weight_bias = weight_bias
         config = get_current_vllm_config()
         self.model_dtype = config.model_config.dtype if config.model_config else None
 
@@ -165,7 +167,11 @@ class RMSNormQuantPattern:
 
 class RMSNormStaticQuantPattern(RMSNormQuantPattern):
     def __init__(
-        self, epsilon: float, quant_dtype: torch.dtype, symmetric: bool = True
+        self,
+        epsilon: float,
+        quant_dtype: torch.dtype,
+        symmetric: bool = True,
+        weight_bias: float = 0.0,
     ) -> None:
         fused_key = FusedRMSQuantKey(
             fused_add=False,
@@ -173,19 +179,23 @@ class RMSNormStaticQuantPattern(RMSNormQuantPattern):
                 dtype=quant_dtype, scale=kStaticTensorScale, symmetric=symmetric
             ),
         )
-        super().__init__(epsilon, fused_key)
+        super().__init__(epsilon, fused_key, weight_bias=weight_bias)
 
     def register(self, pm_pass: PatternMatcherPass) -> None:
         # Cannot use methods, as the self argument affects tracing
         def pattern(
             input: torch.Tensor, weight: torch.Tensor, scale: torch.Tensor
         ) -> torch.Tensor:
-            result_rms = vllm.ir.ops.rms_norm(input, weight, self.epsilon)
+            result_rms = vllm.ir.ops.rms_norm(
+                input, weight, self.epsilon, weight_bias=self.weight_bias
+            )
             return self.quant_matcher(result_rms, scale)[0]
 
         def replacement(
             input: torch.Tensor, weight: torch.Tensor, scale: torch.Tensor
         ) -> torch.Tensor:
+            if self.weight_bias:
+                weight = weight + self.weight_bias
             result = torch.empty(
                 input.shape, device=input.device, dtype=self.quant_dtype
             )
@@ -220,7 +230,11 @@ class RMSNormStaticQuantPattern(RMSNormQuantPattern):
 
 class FusedAddRMSNormStaticQuantPattern(RMSNormQuantPattern):
     def __init__(
-        self, epsilon: float, quant_dtype: torch.dtype, symmetric: bool = True
+        self,
+        epsilon: float,
+        quant_dtype: torch.dtype,
+        symmetric: bool = True,
+        weight_bias: float = 0.0,
     ) -> None:
         key = FusedRMSQuantKey(
             fused_add=True,
@@ -228,7 +242,7 @@ class FusedAddRMSNormStaticQuantPattern(RMSNormQuantPattern):
                 dtype=quant_dtype, scale=kStaticTensorScale, symmetric=symmetric
             ),
         )
-        super().__init__(epsilon, key)
+        super().__init__(epsilon, key, weight_bias=weight_bias)
 
     def register(self, pm_pass: PatternMatcherPass) -> None:
         def pattern(
@@ -238,7 +252,7 @@ class FusedAddRMSNormStaticQuantPattern(RMSNormQuantPattern):
             scale: torch.Tensor,
         ) -> tuple[torch.Tensor, torch.Tensor]:
             result_rms, residual = vllm.ir.ops.fused_add_rms_norm(
-                input, residual, weight, self.epsilon
+                input, residual, weight, self.epsilon, weight_bias=self.weight_bias
             )
             result, _ = self.quant_matcher(result_rms, scale)
 
@@ -253,6 +267,8 @@ class FusedAddRMSNormStaticQuantPattern(RMSNormQuantPattern):
             # In case we're matching native rms-norm, conversions might be
             # optimized out. We convert here just to be safe.
             input = input.to(dtype=self.model_dtype)
+            if self.weight_bias:
+                weight = weight + self.weight_bias
 
             result = torch.empty_like(input, dtype=self.quant_dtype)
             at = auto_functionalized(
@@ -493,19 +509,22 @@ class RMSNormDynamicQuantPattern(RMSNormQuantPattern):
         quant_dtype: torch.dtype,
         group_shape: GroupShape = GroupShape.PER_TOKEN,
         symmetric: bool = True,
+        weight_bias: float = 0.0,
     ) -> None:
         scale = ScaleDesc(torch.float32, False, group_shape)
         key = FusedRMSQuantKey(
             fused_add=False,
             quant=QuantKey(dtype=quant_dtype, scale=scale, symmetric=symmetric),
         )
-        super().__init__(epsilon, key)
+        super().__init__(epsilon, key, weight_bias=weight_bias)
 
     def register(self, pm_pass: PatternMatcherPass) -> None:
         def pattern(
             input: torch.Tensor, weight: torch.Tensor
         ) -> tuple[torch.Tensor, torch.Tensor]:
-            result_rms = vllm.ir.ops.rms_norm(input, weight, self.epsilon)
+            result_rms = vllm.ir.ops.rms_norm(
+                input, weight, self.epsilon, weight_bias=self.weight_bias
+            )
             # result, scale
             return self.quant_matcher(result_rms)  # type: ignore[no-any-return]
 
@@ -515,6 +534,8 @@ class RMSNormDynamicQuantPattern(RMSNormQuantPattern):
             # In case we're matching native rms-norm, conversions might be
             # optimized out. We convert here just to be safe.
             input = input.to(dtype=self.model_dtype)
+            if self.weight_bias:
+                weight = weight + self.weight_bias
 
             result = torch.empty_like(input, dtype=self.quant_dtype)
             scale = self.quant_matcher.make_scale(input)
@@ -552,20 +573,21 @@ class FusedAddRMSNormDynamicQuantPattern(RMSNormQuantPattern):
         quant_dtype: torch.dtype,
         group_shape: GroupShape = GroupShape.PER_TOKEN,
         symmetric: bool = True,
+        weight_bias: float = 0.0,
     ) -> None:
         scale = ScaleDesc(torch.float32, False, group_shape)
         key = FusedRMSQuantKey(
             fused_add=True,
             quant=QuantKey(dtype=quant_dtype, scale=scale, symmetric=symmetric),
         )
-        super().__init__(epsilon, key)
+        super().__init__(epsilon, key, weight_bias=weight_bias)
 
     def register(self, pm_pass: PatternMatcherPass) -> None:
         def pattern(
             input: torch.Tensor, weight: torch.Tensor, residual: torch.Tensor
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             result_rms, residual = vllm.ir.ops.fused_add_rms_norm(
-                input, residual, weight, self.epsilon
+                input, residual, weight, self.epsilon, weight_bias=self.weight_bias
             )
             result, scale = self.quant_matcher(result_rms)
 
@@ -577,6 +599,8 @@ class FusedAddRMSNormDynamicQuantPattern(RMSNormQuantPattern):
             # In case we're matching native rms-norm, conversions might be
             # optimized out. We convert here just to be safe.
             input = input.to(dtype=self.model_dtype)
+            if self.weight_bias:
+                weight = weight + self.weight_bias
 
             result = torch.empty_like(input, dtype=self.quant_dtype)
             scale = self.quant_matcher.make_scale(input)
@@ -627,21 +651,29 @@ class RMSNormQuantFusionPass(VllmPatternMatcherPass):
         # Make sure fused add patterns are before simple rms norm,
         # as the latter is a subset of the former in torch ops
         for epsilon in [1e-5, 1e-6]:
-            # Fuse fused_add_rms_norm + static fp8 quant
-            FusedAddRMSNormStaticQuantPattern(epsilon, FP8_DTYPE).register(
-                self.patterns
-            )
+            # weight_bias=0.0 is plain RMSNorm (default); weight_bias=1.0
+            # additionally matches Gemma-style RMSNorm (raw, zero-centered
+            # weights), fusing it into the same unmodified quant kernels.
+            for weight_bias in [0.0, 1.0]:
+                # Fuse fused_add_rms_norm + static fp8 quant
+                FusedAddRMSNormStaticQuantPattern(
+                    epsilon, FP8_DTYPE, weight_bias=weight_bias
+                ).register(self.patterns)
 
-            # Fuse rms_norm + static fp8 quant
-            RMSNormStaticQuantPattern(epsilon, FP8_DTYPE).register(self.patterns)
+                # Fuse rms_norm + static fp8 quant
+                RMSNormStaticQuantPattern(
+                    epsilon, FP8_DTYPE, weight_bias=weight_bias
+                ).register(self.patterns)
 
-            # Fuse fused_add_rms_norm + dynamic per-token fp8 quant
-            FusedAddRMSNormDynamicQuantPattern(epsilon, FP8_DTYPE).register(
-                self.patterns
-            )
+                # Fuse fused_add_rms_norm + dynamic per-token fp8 quant
+                FusedAddRMSNormDynamicQuantPattern(
+                    epsilon, FP8_DTYPE, weight_bias=weight_bias
+                ).register(self.patterns)
 
-            # Fuse rms_norm + dynamic per-token fp8 quant
-            RMSNormDynamicQuantPattern(epsilon, FP8_DTYPE).register(self.patterns)
+                # Fuse rms_norm + dynamic per-token fp8 quant
+                RMSNormDynamicQuantPattern(
+                    epsilon, FP8_DTYPE, weight_bias=weight_bias
+                ).register(self.patterns)
 
             # Only register group quant patterns on CUDA/ROCm where the C++ op exists
             for group_shape in [GroupShape(1, 128), GroupShape(1, 64)]:

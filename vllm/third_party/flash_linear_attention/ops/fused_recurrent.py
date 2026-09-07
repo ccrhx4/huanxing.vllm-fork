@@ -10,6 +10,7 @@
 
 import torch
 
+from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
 
 from .op import exp, log
@@ -438,9 +439,20 @@ def fused_recurrent_gated_delta_rule_packed_decode(
         raise ValueError(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
-    BV = min(triton.next_power_of_2(V), 32)
     num_stages = 3
-    num_warps = 1
+    # NVIDIA warp=32 SMs saturate a head's work with a small V-tile and a
+    # single warp, so BV=32/num_warps=1 is the CUDA-tuned default. On Intel
+    # XPU that under-subscribes the EUs/subgroups: a BV/num_warps sweep
+    # across batch sizes 1-256 and V in {128, 256} found BV=64/num_warps=8
+    # consistently at or near the optimum (1.7-2.2x faster than the
+    # BV=32-based heuristic previously used here), so use it unconditionally
+    # for XPU rather than scaling num_warps with batch size.
+    if current_platform.is_xpu():
+        BV = min(triton.next_power_of_2(V), 64)
+        num_warps = 8
+    else:
+        BV = min(triton.next_power_of_2(V), 32)
+        num_warps = 1
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)

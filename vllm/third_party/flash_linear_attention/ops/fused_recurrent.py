@@ -10,7 +10,6 @@
 
 import torch
 
-from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
 
 from .op import exp, log
@@ -442,14 +441,17 @@ def fused_recurrent_gated_delta_rule_packed_decode(
     num_stages = 3
     # NVIDIA warp=32 SMs saturate a head's work with a small V-tile and a
     # single warp, so BV=32/num_warps=1 is the CUDA-tuned default. On Intel
-    # XPU that under-subscribes the EUs/subgroups: a BV/num_warps sweep
-    # across batch sizes 1-256 and V in {128, 256} found BV=64/num_warps=8
-    # consistently at or near the optimum (1.7-2.2x faster than the
-    # BV=32-based heuristic previously used here), so use it unconditionally
-    # for XPU rather than scaling num_warps with batch size.
-    if current_platform.is_xpu():
+    # XPU that under-subscribes the EUs/subgroups: a BV/num_warps sweep across
+    # batch sizes 1-256 and V in {128, 256} found BV=64 consistently optimal.
+    # V=256 tiles load/store 2x the per-program state and are bandwidth-bound
+    # at decode, needing 16 warps for enough memory-level parallelism
+    # (~1.55x over 8 warps); V<=128 tiles are neutral to warp count, so keep 8.
+    # Detect XPU via torch directly: current_platform is UnspecifiedPlatform
+    # when the kernel is imported without full vLLM init (e.g. benchmarks),
+    # which would silently fall back to the slow CUDA-default path.
+    if torch.xpu.is_available():
         BV = min(triton.next_power_of_2(V), 64)
-        num_warps = 8
+        num_warps = 16 if V >= 256 else 8
     else:
         BV = min(triton.next_power_of_2(V), 32)
         num_warps = 1

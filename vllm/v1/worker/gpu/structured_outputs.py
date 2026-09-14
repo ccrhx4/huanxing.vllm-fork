@@ -52,7 +52,6 @@ class StructuredOutputsWorker:
             (max_num_logits, cdiv(vocab_size, 32)), dtype=torch.int32, device=device
         )
         self.device = device
-        self.copy_stream = torch.cuda.Stream()
         self.mask_stride = mask_stride
         self.num_bonus_tokens = num_bonus_tokens
 
@@ -66,11 +65,26 @@ class StructuredOutputsWorker:
         if not grammar_req_ids:
             return
 
-        # Asynchronously copy the bitmask to GPU.
-        with torch.cuda.stream(self.copy_stream):
-            bitmask = async_copy_to_gpu(
-                grammar_bitmask, out=self.grammar_bitmask[: grammar_bitmask.shape[0]]
-            )
+        # Copy the bitmask and the logits mapping to GPU on the *current*
+        # stream (rather than a dedicated copy stream synchronized via
+        # cross-stream wait_stream/wait_event). Using a separate stream here
+        # previously required a cross-stream event wait to join back with
+        # the current stream before launching the bitmask kernel below;
+        # that cross-stream dependency is not capturable by XPU's SYCL
+        # command-graph backend (both the vanilla CUDA-graph-style FULL
+        # capture and the breakable-cudagraph PIECEWISE capture route
+        # through this code during model warmup), and raises
+        # "Event dependency from handler::depends_on does not correspond
+        # to a node within the graph" / "wait cannot be called for a queue
+        # which is recording to a command graph" as soon as graph capture
+        # (or its warmup pass) reaches this method. Issuing the copies on
+        # the current stream keeps everything in a single, graph-capturable
+        # stream with normal in-order semantics, at the cost of not
+        # overlapping these (small) H2D copies with unrelated concurrent
+        # work on the current stream.
+        bitmask = async_copy_to_gpu(
+            grammar_bitmask, out=self.grammar_bitmask[: grammar_bitmask.shape[0]]
+        )
 
         # Construct bitmask -> logits mapping
         # Key by (request, position) rather than absolute logit index:
@@ -85,18 +99,12 @@ class StructuredOutputsWorker:
             self.mask_stride,
         )
 
-        # Asynchronously copy the mapping to GPU.
-        with torch.cuda.stream(self.copy_stream):
-            logits_indices = torch.tensor(
-                mapping, dtype=torch.int32, device="cpu", pin_memory=PIN_MEMORY
-            )
-            logits_indices = self.logits_indices[: len(mapping)].copy_(
-                logits_indices, non_blocking=True
-            )
-
-        # Ensure all async copies are complete before launching the kernel.
-        current_stream = torch.cuda.current_stream()
-        current_stream.wait_stream(self.copy_stream)
+        logits_indices = torch.tensor(
+            mapping, dtype=torch.int32, device="cpu", pin_memory=PIN_MEMORY
+        )
+        logits_indices = self.logits_indices[: len(mapping)].copy_(
+            logits_indices, non_blocking=True
+        )
 
         num_masks = bitmask.shape[0]
         assert num_masks == len(mapping)
@@ -114,10 +122,6 @@ class StructuredOutputsWorker:
             MASK_STRIDE=self.mask_stride,
             BLOCK_SIZE=BLOCK_SIZE,
         )
-
-        # Ensure the copy stream waits for the device tensors to finish being used
-        # before it re-uses or deallocates them
-        self.copy_stream.wait_stream(current_stream)
 
 
 # Adapted from

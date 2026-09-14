@@ -1522,3 +1522,36 @@ def reset_buffer_cache():
     _TRITON_TABLE_CACHE.clear()
     _TRITON_SPLIT_CACHE.clear()
     torch.accelerator.empty_cache()
+
+
+def ensure_topk_topp_tables(device: torch.device) -> None:
+    """Eagerly populate the per-device top-k/top-p lookup tables.
+
+    ``apply_top_k_top_p_triton`` lazily builds these tables (via
+    ``Tensor.new_tensor`` on a plain Python list) the first time it runs
+    for a given device. That lazy path performs a host-to-device copy
+    whose completion is tracked with an event on the caching host
+    allocator; on XPU that event bookkeeping cannot be captured into a
+    SYCL command graph ("wait method cannot be used for an event
+    associated with a command graph"). ``compile_or_warm_up_model``'s
+    post-capture ``warmup_kernels`` pass deliberately exercises the
+    top-p code path (via ``SamplingParams.for_sampler_warmup()``) to
+    JIT-compile the Triton kernels, which can run while a previously
+    captured graph is still in flight on the same stream. Call this
+    once, eagerly, before any graph capture/replay is set up (e.g. at
+    the start of ``compile_or_warm_up_model``) so the lazy branch above
+    is never taken from inside a graph-active context.
+    """
+    if device in _TRITON_TABLE_CACHE:
+        return
+    with gpu_sync_allowed():
+        normal_cdf_to_sigma_table = torch.tensor(
+            _NORMAL_CDF_TO_SIGMA_TABLE, dtype=torch.float32, device=device
+        )
+        percentile_to_std_table = torch.tensor(
+            _PERCENTILE_TO_STD_TABLE, dtype=torch.float32, device=device
+        )
+        _TRITON_TABLE_CACHE[device] = (
+            normal_cdf_to_sigma_table,
+            percentile_to_std_table,
+        )

@@ -150,6 +150,16 @@ def kernel_warmup(worker: "Worker", *, process_local_only: bool = False):
 
     qwen_triton_warmup(worker.model_runner, worker.vllm_config.model_config)
 
+    # Eagerly build the top-k/top-p lookup tables (lazily created on first
+    # use otherwise) before any cudagraph capture/replay is set up. The
+    # lazy path does a host-to-device tensor creation whose completion
+    # event bookkeeping is not safe to run while the stream is associated
+    # with a (SYCL) command graph, which the post-capture sampler warmup
+    # pass can otherwise trigger on XPU.
+    from vllm.v1.sample.ops.topk_topp_triton import ensure_topk_topp_tables
+
+    ensure_topk_topp_tables(worker.device)
+
     compilation_config = worker.vllm_config.compilation_config
     cudagraph_capture_sizes = list(compilation_config.cudagraph_capture_sizes or [])
 

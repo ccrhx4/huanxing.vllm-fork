@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+import os
 from typing import TYPE_CHECKING
 
 import torch
@@ -34,6 +35,66 @@ if TYPE_CHECKING:
     from vllm.model_executor.layers.fused_moe.routed_experts import RoutedExperts
 
 logger = init_logger(__name__)
+
+# Opt-in single-accumulator interleaved SwiGLU GEMM1+activation fusion for
+# the XPU unquantized backend, ported from sgl-kernel-xpu (see
+# /work/fusemlp/design.md and /work/fusemlp/USAGE.md). Off by default: the
+# interleaved gate/up layout only benefits silu/gelu activations, and the
+# conversion below replaces `layer.w13_weight`/`w13_bias` in place (freeing
+# the pre-interleaved copy) so it is a one-way, sticky change for the layer.
+_XPU_FUSED_MOE_INTERLEAVED_ENV = "VLLM_XPU_FUSED_MOE_INTERLEAVED"
+
+
+def _maybe_interleave_xpu_gate_up_weights(
+    layer: "RoutedExperts", moe_config: FusedMoEConfig
+) -> bool:
+    """Convert `layer.w13_weight`/`w13_bias` to the interleaved layout
+    consumed by the fused SwiGLU grouped-GEMM op, in place, when eligible.
+
+    Returns True if the conversion ran (so the caller must skip the regular
+    `.transpose(-1, -2)` weight-layout step, since the fused kernel wants
+    w13 in its original [E, N, K] layout, not the unfused kernel's
+    [E, K, N] layout), and False otherwise.
+    """
+    if os.environ.get(_XPU_FUSED_MOE_INTERLEAVED_ENV, "0").strip().upper() not in (
+        "1",
+        "ON",
+        "TRUE",
+        "YES",
+        "Y",
+    ):
+        return False
+
+    activation = getattr(layer, "activation", None)
+    activation_value = getattr(activation, "value", activation)
+    if activation_value not in ("silu", "gelu"):
+        logger.warning_once(
+            "VLLM_XPU_FUSED_MOE_INTERLEAVED is set but activation %s is not "
+            "silu/gelu; skipping the interleaved gate/up fusion for this "
+            "layer.",
+            activation_value,
+        )
+        return False
+    if moe_config.num_local_experts % 8 != 0:
+        logger.warning_once(
+            "VLLM_XPU_FUSED_MOE_INTERLEAVED is set but num_local_experts=%d "
+            "is not a multiple of 8; skipping the interleaved gate/up "
+            "fusion for this layer.",
+            moe_config.num_local_experts,
+        )
+        return False
+
+    from vllm_xpu_kernels.moe_utils import interleave_gate_up_weights_xe20
+
+    layer.w13_weight.data = interleave_gate_up_weights_xe20(layer.w13_weight.data)
+    layer.w13_weight.xpu_interleaved = True
+    if getattr(layer, "w13_bias", None) is not None:
+        layer.w13_bias.data = interleave_gate_up_weights_xe20(
+            layer.w13_bias.data.to(torch.float32)
+        )
+    return True
+
+
 
 
 # --8<-- [start:unquantized_fused_moe]
@@ -192,7 +253,12 @@ class UnquantizedFusedMoEMethod(FusedMoEMethodBase, CustomOp):
             w13 = layer.w13_weight
             w2 = layer.w2_weight
 
-            w13.data = w13.transpose(-1, -2).contiguous()
+            # The interleaved fusion kernel consumes w13 in its original
+            # (pre-transpose) [E, N, K] layout -- see
+            # `interleave_gate_up_weights_xe20`'s docstring -- so skip the
+            # generic `.transpose(-1, -2)` below when the conversion runs.
+            if not _maybe_interleave_xpu_gate_up_weights(layer, self.moe):
+                w13.data = w13.transpose(-1, -2).contiguous()
             w2.data = w2.transpose(-1, -2).contiguous()
 
             self._setup_kernel(

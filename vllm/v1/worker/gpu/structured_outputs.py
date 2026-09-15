@@ -6,7 +6,6 @@ import torch
 from vllm.triton_utils import tl, triton
 from vllm.utils.math_utils import cdiv
 from vllm.utils.torch_utils import PIN_MEMORY
-from vllm.v1.worker.gpu.buffer_utils import async_copy_to_gpu
 from vllm.v1.worker.gpu.input_batch import InputBatch
 
 
@@ -51,6 +50,40 @@ class StructuredOutputsWorker:
         self.grammar_bitmask = torch.zeros(
             (max_num_logits, cdiv(vocab_size, 32)), dtype=torch.int32, device=device
         )
+        # Persistent, pre-pinned CPU staging buffers, allocated once here
+        # (well outside any capture context) and reused (overwritten
+        # in-place) on every call to apply_grammar_bitmask(), exactly like
+        # the device-side self.logits_indices/self.grammar_bitmask buffers
+        # above are already reused across calls. This is the standard
+        # "static buffer" pattern required for cudagraph-capturable code:
+        # ops issued while the current stream is being recorded into a
+        # (breakable) cudagraph capture do not execute immediately -- they
+        # are captured for later replay -- so the buffer's *live* contents
+        # at replay time are what get copied; the harness is expected to
+        # refresh these buffers with fresh data before/at each step, which
+        # is exactly what this method does.
+        #
+        # This also sidesteps two failure modes we hit with alternatives:
+        #  - Allocating a *fresh* pinned tensor per call (`pin_memory=True`)
+        #    routes through the caching host allocator, which can block on
+        #    a stream-ordered free event; if the current stream is mid
+        #    cudagraph capture, that event never fires and the call hangs.
+        #  - Using a fresh *unpinned* CPU tensor forces PyTorch to treat
+        #    the H2D copy as synchronous (waits for device completion)
+        #    regardless of `non_blocking`; if the current stream is mid
+        #    capture, that device-completion signal never arrives (since
+        #    captured ops don't execute until replay), so this also hangs.
+        # A pre-pinned, pre-existing buffer allows a truly async
+        # (non-blocking, no host wait) H2D copy, which is capturable.
+        self.logits_indices_cpu = torch.zeros(
+            max_num_logits, dtype=torch.int32, device="cpu", pin_memory=PIN_MEMORY
+        )
+        self.grammar_bitmask_cpu = torch.zeros(
+            (max_num_logits, cdiv(vocab_size, 32)),
+            dtype=torch.int32,
+            device="cpu",
+            pin_memory=PIN_MEMORY,
+        )
         self.device = device
         self.mask_stride = mask_stride
         self.num_bonus_tokens = num_bonus_tokens
@@ -82,8 +115,22 @@ class StructuredOutputsWorker:
         # stream with normal in-order semantics, at the cost of not
         # overlapping these (small) H2D copies with unrelated concurrent
         # work on the current stream.
-        bitmask = async_copy_to_gpu(
-            grammar_bitmask, out=self.grammar_bitmask[: grammar_bitmask.shape[0]]
+        #
+        # Both copies stage through the pre-pinned CPU buffers allocated in
+        # __init__ (see the comment there for why: fresh-pinned or
+        # fresh-unpinned per-call tensors both hang here if the current
+        # stream is mid cudagraph capture).
+        num_masks = grammar_bitmask.shape[0]
+        bitmask_cpu = self.grammar_bitmask_cpu[:num_masks]
+        # Write via the numpy view directly instead of Tensor.copy_(): a
+        # plain memory write bypasses ATen's copy_ dispatch, which (for a
+        # pinned destination) can trigger the caching host allocator's
+        # completion-event bookkeeping -- and querying/waiting on that
+        # event hangs if the current stream is being recorded into a
+        # cudagraph capture.
+        bitmask_cpu.numpy()[:] = grammar_bitmask
+        bitmask = self.grammar_bitmask[:num_masks].copy_(
+            bitmask_cpu, non_blocking=True
         )
 
         # Construct bitmask -> logits mapping
@@ -99,11 +146,11 @@ class StructuredOutputsWorker:
             self.mask_stride,
         )
 
-        logits_indices = torch.tensor(
-            mapping, dtype=torch.int32, device="cpu", pin_memory=PIN_MEMORY
-        )
-        logits_indices = self.logits_indices[: len(mapping)].copy_(
-            logits_indices, non_blocking=True
+        mapping_len = len(mapping)
+        mapping_cpu = self.logits_indices_cpu[:mapping_len]
+        mapping_cpu.numpy()[:] = mapping
+        logits_indices = self.logits_indices[:mapping_len].copy_(
+            mapping_cpu, non_blocking=True
         )
 
         num_masks = bitmask.shape[0]

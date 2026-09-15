@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+import os
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
@@ -333,7 +334,19 @@ def warmup_kernels(
         # Warm up sampler and perform a decode step for non-pooling models.
 
         grammar_output = None
-        if model_runner.is_last_pp_rank:
+        # Exercising the structured-output bitmask kernel here is normally
+        # useful to JIT/warm it up ahead of real requests, but on XPU with
+        # graph-mode serving this deadlocks: apply_grammar_bitmask()'s H2D
+        # copies never complete when issued from this warmup call site
+        # (see structured_outputs.py for the earlier related graph-capture
+        # fixes; this is a further, unresolved instance of the same class
+        # of oneCCL/SYCL graph-capture interaction bug). Skip it by default;
+        # set VLLM_XPU_WARMUP_GRAMMAR_BITMASK=1 to re-enable (e.g. for
+        # eager mode, non-XPU platforms, or once the underlying bug is
+        # fixed).
+        if model_runner.is_last_pp_rank and os.environ.get(
+            "VLLM_XPU_WARMUP_GRAMMAR_BITMASK", "0"
+        ) == "1":
             # Build a GrammarOutput to exercise the structured output bitmask
             # kernel during the prefill step.
             vocab_size = model_runner.model_config.get_vocab_size()

@@ -25,6 +25,7 @@
 # limitations under the License.
 """Inference-only Qwen2MoE model compatible with HuggingFace weights."""
 
+import os
 from collections.abc import Iterable
 from itertools import islice
 from typing import Any
@@ -69,6 +70,25 @@ from .utils import (
 
 logger = init_logger(__name__)
 
+# Opt-in single-accumulator interleaved SwiGLU GEMM+activation fusion for a
+# *dense* FFN's gate/up projection (this MLP, used both by Qwen2Moe's
+# shared-expert path and by Qwen3.5/3.6's dense-text FFN layers), the
+# non-grouped analog of VLLM_XPU_FUSED_MOE_INTERLEAVED (see
+# vllm/model_executor/layers/fused_moe/unquantized_fused_moe_method.py and
+# /work/fusemlp/design.md). Off by default: op-level benchmarking
+# (vllm-xpu-kernels/benchmark/benchmark_dense_mlp_interleaved.py) showed the
+# fused kernel is only faster than the existing oneDNN/matmul path in the
+# bandwidth-bound decode regime at some TP degrees, and is *slower* for
+# prefill-shaped batches at the Qwen3.6-27B dense-FFN shape -- so this is
+# left opt-in/experimental rather than enabled unconditionally.
+_XPU_FUSED_DENSE_MLP_INTERLEAVED_ENV = "VLLM_XPU_FUSED_DENSE_MLP_INTERLEAVED"
+
+
+def _xpu_fused_dense_mlp_interleaved_enabled() -> bool:
+    return os.environ.get(
+        _XPU_FUSED_DENSE_MLP_INTERLEAVED_ENV, "0"
+    ).strip().upper() in ("1", "ON", "TRUE", "YES", "Y")
+
 
 class Qwen2MoeMLP(nn.Module):
     def __init__(
@@ -108,10 +128,72 @@ class Qwen2MoeMLP(nn.Module):
             )
         self.act_fn = SiluAndMul()
         self.expert_gate = expert_gate
+        self.hidden_act = hidden_act
+        # Sticky flag: once the gate_up_proj weight has been repacked into
+        # the interleaved layout, `gate_up_proj.weight` is no longer usable
+        # by the regular (unfused) path, so eligibility is decided once
+        # (lazily, on first forward -- after weight loading) and cached.
+        self._xpu_dense_fused_interleaved: bool | None = None
+
+    def _maybe_fused_xpu_forward(self, x: torch.Tensor) -> torch.Tensor | None:
+        """Try the fused interleaved SwiGLU GEMM path; returns None (and
+        leaves the layer untouched) if ineligible, so the caller falls back
+        to the regular gate_up_proj/act_fn path."""
+        if self._xpu_dense_fused_interleaved is None:
+            # Note: eligibility must not depend on the input tensor `x`
+            # (e.g. `x.is_xpu`/`x.device`) -- torch.compile's tracing pass
+            # may invoke this once with a FakeTensor/meta-device `x`, which
+            # would otherwise get this decision permanently (and
+            # incorrectly) cached as ineligible. `gate_up_proj.weight` is a
+            # real parameter at both trace and run time, so key off that.
+            eligible = (
+                _xpu_fused_dense_mlp_interleaved_enabled()
+                and self.gate_up_proj.weight.device.type == "xpu"
+                and self.hidden_act == "silu"
+                and self.gate_up_proj.weight.dtype == torch.bfloat16
+                and self.gate_up_proj.bias is None
+            )
+            if eligible:
+                from vllm_xpu_kernels.moe_utils import (
+                    interleave_gate_up_weights_xe20,
+                )
+
+                # interleave_gate_up_weights_xe20 expects a leading "expert"
+                # dim; a dense weight is the E=1 degenerate case.
+                self.gate_up_proj.weight.data = interleave_gate_up_weights_xe20(
+                    self.gate_up_proj.weight.data.unsqueeze(0)
+                ).squeeze(0)
+            self._xpu_dense_fused_interleaved = eligible
+
+        if not self._xpu_dense_fused_interleaved:
+            return None
+
+        import vllm_xpu_kernels._xpu_C  # noqa: F401
+
+        orig_shape = x.shape
+        x2d = x.reshape(-1, orig_shape[-1])
+        n_full = self.gate_up_proj.weight.shape[0]
+        out = torch.empty(
+            (x2d.shape[0], n_full // 2), dtype=x2d.dtype, device=x2d.device
+        )
+        torch.ops._xpu_C.dense_swiglu_gemm_xe20_interleaved(
+            output=out,
+            activations=x2d,
+            weight=self.gate_up_proj.weight,
+            bias=None,
+            activation_type=0,  # silu
+            gemm1_alpha=1.702,
+            gemm1_limit=7.0,
+        )
+        return out.reshape(*orig_shape[:-1], -1)
 
     def forward(self, x):
-        gate_up, _ = self.gate_up_proj(x)
-        out = self.act_fn(gate_up)
+        fused_out = self._maybe_fused_xpu_forward(x)
+        if fused_out is not None:
+            out = fused_out
+        else:
+            gate_up, _ = self.gate_up_proj(x)
+            out = self.act_fn(gate_up)
         out, _ = self.down_proj(out)
 
         if self.expert_gate is not None:
